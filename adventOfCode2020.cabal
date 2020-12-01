@@ -58,13 +58,13 @@ library
   other-extensions:    OverloadedStrings, TemplateHaskell, TypeFamilies, GADTs, RankNTypes, MultiWayIf
 
   -- Other library packages from which modules are imported.
-  build-depends:       base ^>=4.13.0.0
-                       , text ^>=1.2.4.0
+  build-depends:       base ^>=4.14.0.0
+                       , text ^>=1.2
                        , bytestring ^>=0.10
-                       , attoparsec ^>=0.13.2.4
+                       , attoparsec ^>=0.13
                        , array ^>=0.5.4.0
                        , lens ^>=4.19
-                       , vector ^>=0.12.1.2
+                       , vector ^>=0.12
                        , mtl ^>=2.2.2
                        , recursion-schemes ^>= 5.1
                        , linear ^>= 1.21
@@ -90,10 +90,10 @@ executable adventOfCode2020
   other-extensions:    OverloadedStrings, TemplateHaskell, TypeFamilies, GADTs, RankNTypes, MultiWayIf
 
   -- Other library packages from which modules are imported.
-  build-depends:       base ^>=4.13.0.0
+  build-depends:       base ^>=4.14.0.0
                        , adventOfCode2020
                        , bytestring ^>=0.10
-                       , attoparsec ^>=0.13.2.4
+                       , attoparsec ^>=0.13
 
   -- Directories containing source files.
   hs-source-dirs:      src-exe
@@ -117,6 +117,6 @@ test-suite adventOfCode2020-test
   main-is:             MyLibTest.hs
 
   -- Test dependencies.
-  build-depends:       base ^>=4.13.0.0
+  build-depends:       base ^>=4.14.0.0
   ghc-options: -Wno-tabs
 

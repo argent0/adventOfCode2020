@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TupleSections #-}
 module Day01 (runSolution) where
 
 import qualified Data.ByteString as BS
@@ -12,7 +13,10 @@ import qualified Data.List as DL
 
 -- | Generates the solution from the input
 solver :: [Int] -> Int
-solver = DL.foldl' (+) 0
+solver input = (\(a,(b,c)) -> a*b*c) $
+	head $
+	filter (\(a,(b,c)) -> c + a + b == 2020) $
+	(,) <$> input <*> ( (,) <$> input <*> input)
 
 parseInput :: Parser [Int]
 parseInput =
