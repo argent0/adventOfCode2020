@@ -11,12 +11,25 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
 import qualified Data.List as DL
 
+{-
+ - Could use a binnary tree to make this n log n complexity.
+ -
+ - for every n in the input insert it in BT and search that tree for 2020-n
+ -}
+
 -- | Generates the solution from the input
 solver :: [Int] -> Int
 solver input = (\(a,(b,c)) -> a*b*c) $
 	head $
 	filter (\(a,(b,c)) -> c + a + b == 2020) $
 	(,) <$> input <*> ( (,) <$> input <*> input)
+
+solver1 :: [Int] -> Int
+solver1 input = uncurry (*) $
+	head $
+	filter (\(a,b) -> a + b == 2020) $
+	(,) <$> input <*> input
+
 
 parseInput :: Parser [Int]
 parseInput =
@@ -30,4 +43,4 @@ runSolution filePath = do
 	case parseResult of
 		Left err -> putStrLn err
 		Right input ->
-			print $ solver input
+			print $ solver1 input
