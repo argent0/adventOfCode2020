@@ -36,7 +36,7 @@ isValid (low, high, c, str) = low <= amount && amount <= high
 data Stage = Undecided | OkSoFar | Ok | Unacceptable deriving (Show, Eq)
 
 isValid' :: (Int, Int, Char, String) -> Bool
-isValid' (ilow, ihigh, c, str) = (== Ok) $ DL.foldl' folder Undecided $ zipWith (,) [1..] str
+isValid' (ilow, ihigh, c, str) = (== Ok) $ DL.foldl' folder Undecided $ zip [1..] str
 	--(str !! (low - 1) == c) /= (str !! (high - 1) == c)
 	where
 	folder :: Stage -> (Int, Char) -> Stage
