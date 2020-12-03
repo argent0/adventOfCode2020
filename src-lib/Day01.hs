@@ -1,6 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 module Day01 (runSolution) where
+
+import AOC.BSTree.Strict
 
 import qualified Data.ByteString as BS
 import Data.Attoparsec.ByteString (Parser)
@@ -10,6 +13,8 @@ import Data.Attoparsec.ByteString.Char8 (digit, endOfLine)
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
 import qualified Data.List as DL
+import Data.Semigroup (First(..), Option(..))
+import Data.Maybe (listToMaybe, maybe)
 
 {-
  - Could use a binnary tree to make this n log n complexity.
@@ -17,43 +22,44 @@ import qualified Data.List as DL
  - for every n in the input insert it in BT and search that tree for 2020-n
  -}
 
-data Tree a
-	= Empty
-	| Branch !(Tree a) !a !(Tree a)
-
-btInsert :: Ord a => a -> Tree a -> Tree a
-btInsert a Empty = Branch Empty a Empty
-btInsert a (Branch l o r)
-	| a <= o = Branch (btInsert a l) o r
-	| otherwise = Branch l o (btInsert a r)
-
-btElem :: Ord a => a -> Tree a -> Bool
-btElem _ Empty = False
-btElem a (Branch l o r)
-	| a == o = True
-	| a < o = btElem a l
-	| otherwise = btElem a r
-
 -- | Generates the solution from the input
-solver :: [Int] -> Int
-solver input = (\(a,(b,c)) -> a*b*c) $
-	head $
-	filter (\(a,(b,c)) -> c + a + b == 2020) $
-	(,) <$> input <*> ( (,) <$> input <*> input)
-
-solver1 :: [Int] -> Maybe Int
-solver1 input = DL.foldl' folder Nothing input
+solver2 :: [Integer] -> Maybe Integer
+solver2 = fmap getFirst . getOption . foldMap folder . DL.tails
 	where
-	tree = DL.foldl' (flip btInsert) Empty input
-	folder Nothing a
-		|  btElem (2020 - a) tree = Just (a * (2020 - a))
-		|  otherwise = Nothing
-	folder (Just a) _ = Just a
+	folder :: [Integer] -> Option (First Integer)
+	folder [] = Option Nothing
+	folder (x:xs) = Option $ First . (x *) <$> findPairProduct (2020 - x) xs
+
+solver1 :: [Integer] -> Maybe Integer
+solver1 = findPairProduct 2020
+
+-- | Find the product of the first  pairs that adds to some total
+-- >>> findPairProduct 10 [3, 7, undefined]
+-- Just 21
+findPairProduct :: Integer -> [Integer] -> Maybe Integer
+findPairProduct total = fmap (uncurry (*)) . listToMaybe .
+	findPairs (\x y -> x + y == total)
+
+-- | Find all pairs that verify the predicate
+--
+-- O(n^2)
+--
+-- >>> findPairs (\x y -> x + y == 10) [3, 2, 8, 6, 4, 7]
+-- [(3,7),(2,8),(6,4)]
+--
+-- >>> findPairs (\x y -> x + y == 10) [5]
+-- []
+findPairs :: forall a . (a -> a -> Bool) -> [a] -> [(a, a)]
+findPairs predicate = foldr folder [] . DL.tails
+	where
+	folder :: [a] -> [(a, a)] -> [(a, a)]
+	folder [] acc = acc
+	folder (x:xs) acc = maybe acc ((: acc) . (x,)) $ DL.find (predicate x) xs
 
 
-parseInput :: Parser [Int]
+parseInput :: Parser [Integer]
 parseInput =
-	fmap (read :: String -> Int) . filter (not . null) <$>
+	fmap (read :: String -> Integer) . filter (not . null) <$>
 		DAB.many' digit `DAB.sepBy` endOfLine
 
 runSolution :: FilePath -> IO ()

@@ -1,1 +1,1 @@
-watchexec -f "$1" "clear; doctest -Wno-tabs $1"
+watchexec -w "$1" "clear; doctest -Wno-tabs $1"
