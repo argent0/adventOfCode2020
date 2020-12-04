@@ -5,7 +5,7 @@ module Day03  where
 import qualified Data.ByteString as BS
 import Data.Attoparsec.ByteString (Parser)
 import qualified Data.Attoparsec.ByteString as DAB
-import Data.Attoparsec.ByteString.Char8 (notChar, digit, endOfLine, char, anyChar, letter_ascii)
+import Data.Attoparsec.ByteString.Char8 (inClass, satisfy, notChar, digit, endOfLine, char, anyChar, letter_ascii)
 
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
@@ -18,9 +18,6 @@ import qualified Data.Array.IArray as IA
 import Debug.Trace
 
 type Input = IA.Array Int (IA.Array Int Char)
-
--- toArray :: Input -> IA.Array Int MapObj
--- toArray input = IA.array (1, length input) $ zip [1..length input] input
 
 circIdx :: IA.Array Int a -> Int -> a
 circIdx a i = a IA.! ((i - 1) `mod` b + 1)
@@ -60,9 +57,12 @@ solver' input = product
 -- lines are shorter
 parseMap :: Char -> Parser (IA.Array Int (IA.Array Int Char))
 parseMap def = do
-	maxRowLength <- parseLines Data.Functor.<&> maximum . fmap length
-	nRows <- length <$> parseLines
-	parseLines <&> (IA.array (1, nRows) . zip [1 .. nRows] . fmap (makeRow maxRowLength))
+	parsedLines <- parseLines
+	let maxRowLength =  (maximum . fmap length) parsedLines
+	let nRows = length parsedLines
+	traceShowM maxRowLength
+	traceShowM nRows
+	pure $ (IA.array (1, nRows) . zip [1 .. nRows] . fmap (makeRow maxRowLength)) parsedLines
 	where
 	parseLines :: Parser [[Char]]
 	parseLines = parseLine `DAB.sepBy` endOfLine
@@ -78,5 +78,5 @@ runSolution filePath = do
 	case parseResult of
 		Left err -> putStrLn err
 		Right input -> do
-			putStrLn $ unlines $ fmap (show . IA.elems) (IA.elems input)
+			putStrLn $ unlines $ fmap IA.elems (IA.elems input)
 			print $ solver' input
