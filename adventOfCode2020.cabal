@@ -51,7 +51,7 @@ library
   -- Modules exported by the library.
   exposed-modules:     AOC.BSTree.Strict,
                        AOC.BSTree.Lazy,
-                       Day01, Day02, Day03
+                       Day01, Day02, Day03, Day04
 
   -- Modules included in this library but not exported.
   -- other-modules:
@@ -72,6 +72,7 @@ library
                        , linear ^>= 1.21
                        , doctest ^>= 0.16
                        , containers ^>= 0.6
+                       , split ^>= 0.2
 
   -- Directories containing source files.
   hs-source-dirs:      src-lib
