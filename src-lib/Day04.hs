@@ -83,7 +83,8 @@ valid' input = isJust $ do
 			_ -> traceShow input Nothing
 
 	Map.lookup "hcl" kmap >>= \case
-		('#': color) -> if DL.all (inClass "0987654321abcdef") color
+		-- didn't check for lenght = 7
+		('#': color) -> if length color == 6 && DL.all (inClass "0987654321abcdef") color
 			then pure ()
 			else traceShow input Nothing
 		_ -> traceShow input Nothing
