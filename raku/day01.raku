@@ -9,7 +9,8 @@ sub tails(@a) {
 	}
 }
 
-my @input = 'input/Day01'.IO.lines;
+# Coerces the input to a list of integer
+my @input = 'input/Day01'.IO.lines>>.Int;
 
 # Part 1
 tails(@input)
@@ -18,15 +19,25 @@ tails(@input)
 	.map({ $_.key * $_.value })
 	.map: *.say;
 
+
 # Part 2
-sub find_pair(Int:D $total, *@a where {$_.all ~~ Int}) {
+
+sub find_pair
+	( Int:D $total,
+	*@a where {$_.all ~~ Int} --> Pair) {
 	return tails(@a)
 		.map( {($_.key => $_.value.first: * == ($total - $_.key))} )
 		.first: *.value;
 }
 
-tails(@input.map: *.Int) # Coerces the input to a list of integer
+tails(@input.map: *.Int)
 	.map( {($_.key => find_pair(2020 - $_.key, $_.value))})
 	.first({$_.value})
 	.map({ $_.key * $_.value.key * $_.value.value })
 	.map: *.say;
+
+# reddit's volatilebit's solutions uses all combinations but stops after finding
+# the first
+
+say [*] @input.combinations(2).first: *.sum == 2020;
+say [*] @input.combinations(3).first: *.sum == 2020;
