@@ -5,12 +5,8 @@ module Day03  where
 import qualified Data.ByteString as BS
 import Data.Attoparsec.ByteString (Parser)
 import qualified Data.Attoparsec.ByteString as DAB
-import Data.Attoparsec.ByteString.Char8 (inClass, satisfy, notChar, digit, endOfLine, char, anyChar, letter_ascii)
+import Data.Attoparsec.ByteString.Char8 (notChar, endOfLine)
 
-import qualified Data.Text as T
-import qualified Data.Text.IO as TIO
-
-import Data.Functor ((<&>))
 import qualified Data.List as DL
 
 import qualified Data.Array.IArray as IA
@@ -32,7 +28,7 @@ solver :: Int -> Int -> Input -> Int
 solver right down input = foo
 	where
 	(_, size) = IA.bounds input
-	thisWhole = takeWhile (\(row, col) -> row <= size) $ whole right down
+	thisWhole = takeWhile ((<= size) . fst) $ whole right down
 	foo = DL.foldl' folder 0 thisWhole
 	folder :: Int -> (Int, Int) -> Int
 	folder acc (row, col) =

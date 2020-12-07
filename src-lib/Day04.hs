@@ -2,13 +2,7 @@
 {-# LANGUAGE LambdaCase #-}
 module Day04  where
 
-import qualified Data.ByteString as BS
-import Data.Attoparsec.ByteString (Parser)
-import qualified Data.Attoparsec.ByteString as DAB
-import Data.Attoparsec.ByteString.Char8 (inClass, digit, endOfLine, char, anyChar, letter_ascii)
-
-import qualified Data.Text as T
-import qualified Data.Text.IO as TIO
+import Data.Attoparsec.ByteString.Char8 (inClass)
 
 import qualified Data.List as DL
 import qualified Data.List.Split as DLS
@@ -37,7 +31,7 @@ valid input = DL.sort keys == mandatory || DL.sort keys == mandatoryNoCid
 	mandatoryNoCid = DL.sort ["ecl","pid","eyr","hcl","byr","iyr","hgt"]
 
 inInterval :: Int -> Int -> Int -> Maybe ()
-inInterval min max n = if (min<= n) && (n <= max)
+inInterval low high n = if (low<= n) && (n <= high)
 					then pure ()
 					else Nothing
 
@@ -106,8 +100,6 @@ valid' input = isJust $ do
 	
 	where
 	kmap = Map.fromList input
-	mandatory = DL.sort ["ecl","pid","eyr","hcl","byr","iyr","cid","hgt"]
-	mandatoryNoCid = DL.sort ["ecl","pid","eyr","hcl","byr","iyr","hgt"]
 
 parsePass :: [String] -> Input
 parsePass this = concat pairs

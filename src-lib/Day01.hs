@@ -3,18 +3,14 @@
 {-# LANGUAGE TupleSections #-}
 module Day01 (runSolution) where
 
-import AOC.BSTree.Strict
-
 import qualified Data.ByteString as BS
 import Data.Attoparsec.ByteString (Parser)
 import qualified Data.Attoparsec.ByteString as DAB
 import Data.Attoparsec.ByteString.Char8 (digit, endOfLine)
 
-import qualified Data.Text as T
-import qualified Data.Text.IO as TIO
 import qualified Data.List as DL
 import Data.Semigroup (First(..), Option(..))
-import Data.Maybe (listToMaybe, maybe)
+import Data.Maybe (listToMaybe)
 
 {-
  - Could use a binnary tree to make this n log n complexity.

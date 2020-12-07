@@ -11,6 +11,12 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
 import qualified Data.List as DL
 
+import qualified Data.Foldable as DF
+import Data.Semigroup (Option (..))
+import qualified Data.Semigroup as DS
+
+import Control.Arrow
+
 type Input = (Int, Int, Char, String)
 
 -- | Generates the solution from the input
