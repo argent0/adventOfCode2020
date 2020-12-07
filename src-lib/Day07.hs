@@ -25,15 +25,34 @@ newtype Color = Color String deriving (Show, Eq, Ord)
 type Input = (Color, [(Int, Color)])
 
 -- | Generates the solution from the input
--- part 1
---solver :: [Input] -> Integer
-solver input = --trace (unlines $ fmap show (Map.assocs directMap)) $
+-- part 2
+solver :: [Input] -> Integer
+solver input = count (Color "shiny gold")
+	where
+	count :: Color -> Integer
+	count color =
+		case Map.lookup color directMap of
+			Just [] -> 0
+			Just desc ->
+				traceShowId $ DL.foldl' (+) 0 $
+					(fmap (fromIntegral . fst) desc) ++
+					(fmap (uncurry (*) . (fromIntegral *** count)) desc)
+			Nothing -> error $ show color
+
+	directMap :: Map Color [(Int, Color)]
+	directMap = Map.fromList input
+	inverseMap =  Map.fromListWith (++) $ fmap (second (:[])) $ concatMap invertElems input
+	invertElems :: Input -> [(Color, Color)]
+	invertElems (c, cts) = fmap ((,c) . snd) cts
+
+-- Part 1
+solver' input =
 	DL.foldl' (+) 0 $
 		fmap (fromEnum . expand) $ filter (/= (Color "shiny gold")) $ Map.keys directMap
 	where
 	expand :: Color -> Bool
 	expand (Color "shiny gold") = True
-	expand color = --traceShow color $
+	expand color =
 		case Map.lookup color directMap of
 			Just [] -> False
 			Just desc -> DL.any expand (snd <$> desc)
@@ -44,10 +63,7 @@ solver input = --trace (unlines $ fmap show (Map.assocs directMap)) $
 	invertElems :: Input -> [(Color, Color)]
 	invertElems (c, cts) = fmap ((,c) . snd) cts
 
--- parseQ :: [String] -> Input
--- parseQ this = undefined
-
--- | One Integereger per line
+-- | One Rule per line
 parseQ :: [String] -> [Input]
 parseQ = fmap (doer . DLS.splitWhen (=="contain") . words)
 	where

@@ -51,7 +51,7 @@ library
   -- Modules exported by the library.
   exposed-modules:     AOC.BSTree.Strict,
                        AOC.BSTree.Lazy,
-                       Day01, Day02, Day03, Day04, Day05, Day06
+                       Day01, Day02, Day03, Day04, Day05, Day06, Day07
 
   -- Modules included in this library but not exported.
   -- other-modules:

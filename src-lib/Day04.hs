@@ -2,7 +2,9 @@
 {-# LANGUAGE LambdaCase #-}
 module Day04  where
 
-import Data.Attoparsec.ByteString.Char8 (inClass)
+import Data.Attoparsec.ByteString.Lazy (Parser)
+import qualified Data.Attoparsec.ByteString as DAB
+import Data.Attoparsec.ByteString.Char8 (inClass, char8, digit, decimal)
 
 import qualified Data.List as DL
 import qualified Data.List.Split as DLS
@@ -12,6 +14,10 @@ import qualified Data.Map.Strict as Map
 import Debug.Trace
 
 import Data.Maybe (isJust)
+
+import qualified Data.ByteString.Char8 as C
+import Data.ByteString (ByteString)
+import qualified Data.ByteString as DB
 
 type Input = [(String, String)]
 
