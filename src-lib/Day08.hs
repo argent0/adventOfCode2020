@@ -30,6 +30,8 @@ import qualified Data.Array.IArray as IA
 
 import Data.Set (Set)
 import qualified Data.Set as Set
+import Data.Either (isRight)
+import Data.Maybe (mapMaybe)
 
 
 data IntState = IntState
@@ -47,20 +49,38 @@ data Instruction = Acc Integer | Jmp Integer | Nop Integer deriving (Show, Eq, O
 
 type Input = Instruction
 
--- | Generates the solution from the input
 solver :: Array Integer Input -> Integer
-solver input = go initial
+solver input = head $ mapMaybe folder $ [1..maxIp]
 	where
-	go :: IntState -> Integer
+	folder :: Integer -> Maybe Integer
+	folder idx = case input IA.! idx of
+		Nop n -> case stopValue (input IA.// [(idx, Jmp n)]) of
+			Right v -> Just v
+			Left _ -> Nothing
+		Acc n -> Nothing
+		Jmp n -> case stopValue (input IA.// [(idx, Nop n)]) of
+			Right v -> Just v
+			Left _ -> Nothing
+
+	(_, maxIp) = IA.bounds input
+
+-- | Generates the solution from the input
+stopValue :: Array Integer Input -> Either Integer Integer
+stopValue input = go initial
+	where
+	go :: IntState -> Either Integer Integer
 	go st
-		| (st ^. ip) `Set.member` (st ^.visited) = st ^. pacc
-		| otherwise = traceShow st $ go $
+		| (st ^. ip) > maxIp = Right (st ^. acc)
+		| (st ^. ip) `Set.member` (st ^.visited) = Left $ st ^. pacc
+		| otherwise = --traceShow st $
+				go $
 				(over visited (Set.insert (st ^. ip))) $
 				(pacc .~ (st ^. acc)) $
 				case input IA.! (st ^. ip) of
 					Nop _ -> over ip (+1) st
 					Acc n -> (over ip (+1) $ over acc (+n) st)
 					Jmp n -> over ip (+n) st
+	(_, maxIp) = IA.bounds input
 
 -- | One Rule per line
 parseQ :: [String] -> Array Integer Input
