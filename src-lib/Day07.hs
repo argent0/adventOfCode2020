@@ -5,6 +5,7 @@ module Day07 where
 import qualified Data.ByteString as BS
 import Data.Attoparsec.ByteString (Parser)
 import qualified Data.Attoparsec.ByteString as DAB
+import qualified Data.Attoparsec.ByteString.Char8 as DABC8
 import Data.Attoparsec.ByteString.Char8 (inClass, digit, endOfLine, char, anyChar, letter_ascii)
 
 import Data.Map.Strict (Map)
@@ -19,6 +20,7 @@ import Debug.Trace
 
 import Data.Maybe (isJust)
 import Control.Arrow
+import Control.Applicative
 
 newtype Color = Color String deriving (Show, Eq, Ord)
 
@@ -77,6 +79,24 @@ parseQ = fmap (doer . DLS.splitWhen (=="contain") . words)
 	strip [] = []
 	strip (' ':ss) = ss
 	strip ss = ss
+
+parseColor :: Parser Color
+parseColor = (Color . unwords) <$> DAB.count 2 (DAB.many1' letter_ascii <* char ' ')
+
+parseRule :: Parser Input
+parseRule = do
+	outerColor <- parseColor
+	_ <- DABC8.string "contain "
+	desc <- DAB.option [] (
+		DAB.sepBy1'
+			((,) <$> DABC8.decimal <* char ' ' <*> parseColor <*
+				(DABC8.string "bags." <|> DABC8.string "bags" <|>
+				DABC8.string "bag." <|> DABC8.string "bag"))
+			(DABC8.string ", "))
+	pure (outerColor, desc)
+
+parseInput :: Parser [Input]
+parseInput = DAB.sepBy1' parseRule endOfLine
 
 -- Apparently uou had to find the gap op the seatids
 runSolution :: FilePath -> IO ()
