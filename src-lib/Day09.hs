@@ -78,14 +78,18 @@ findPairs predicate = foldr folder [] . DL.tails
 	folder [] acc = acc
 	folder (x:xs) acc = maybe acc ((: acc) . (x,)) $ DL.find (predicate x) xs
 
-parseQ :: [String] -> Vector Integer
-parseQ = Vec.fromList . fmap read
+parseInput :: Parser (Vector Integer)
+parseInput = Vec.fromList <$> DAB.sepBy1' DABC8.decimal endOfLine
 
 runSolution :: FilePath -> IO ()
 runSolution filePath = do
-	contents <- readFile filePath
-	case solver' 25 $ parseQ $ lines contents of
-		Nothing -> print "Part 1 failed"
-		Just part1 -> do
-			print part1
-			print $ solver part1 25 $ parseQ $ lines contents
+	contents <- BS.readFile filePath
+	let parseResult = DAB.parseOnly parseInput contents
+	case parseResult of
+		Left err -> print err
+		Right input ->
+			case solver' 25 input of
+				Nothing -> print "Part 1 failed"
+				Just part1 -> do
+					print part1
+					print $ solver part1 25 input
