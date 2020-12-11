@@ -28,7 +28,7 @@ import qualified Data.Array.IArray as IA
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Either (isRight)
-import Data.Maybe (mapMaybe)
+import Data.Maybe (mapMaybe, catMaybes)
 import Data.Bool (bool)
 
 import Data.Vector (Vector, (!))
@@ -49,11 +49,35 @@ import Data.Bifunctor (bimap)
 type Input = Vector (Vector Char)
 
 -- Solve part 2
-solver rows cols input = fmap (count . fst) $ DL.find (uncurry (==)) $ zip frames $ tail frames
+solver rows cols input = fmap (count . fst) $ DL.find (uncurry (==)) $
+	--zip (fmap (\f -> trace (showMap f) f) frames) $ tail frames
+	zip frames $ tail frames
 	where
 	frames = iterate (step rows cols) input
 	count :: Input -> Integer
 	count = DL.foldl' (+) (0 :: Integer) . fmap (DL.genericLength . filter (=='#'). Vec.toList) . Vec.toList
+
+adjacents :: Input -> Int -> Int -> (Int, Int) -> [(Int, Int)]
+adjacents input rows cols p@(col, row)
+	| isOOB p = error $ "col or row OOB" ++ show (cols, rows, p)
+	| otherwise = -- (if col==0 && row == 0
+		-- then traceShow (col, row, [north, south, west, east, southWest, southEast, northWest, northEast])
+		-- else id) $
+		catMaybes [north, south, west, east, southWest, southEast, northWest, northEast]
+	where
+	isOOB (col, row) =  col < 0 || row < 0 || col >= cols || row >= rows
+
+	north = DL.find finder $ takeWhile (not . isOOB) $ fmap (col,) $ tail $ iterate dec row
+	south = DL.find finder $ takeWhile (not . isOOB) $ fmap (col,) $ tail $ iterate (+1) row
+	west = DL.find finder $ takeWhile (not . isOOB) $ fmap (, row) $ tail $ iterate (+1) col
+	east = DL.find finder $ takeWhile (not . isOOB) $ fmap (, row) $ tail $ iterate dec col
+	southWest = DL.find finder $ takeWhile (not . isOOB) $ tail $ iterate ((+1) *** (+1)) (col, row)
+	southEast = DL.find finder $ takeWhile (not . isOOB) $ tail $ iterate (dec *** (+1)) (col, row)
+	northWest = DL.find finder $ takeWhile (not . isOOB) $ tail $ iterate ((+1) *** dec) (col, row)
+	northEast = DL.find finder $ takeWhile (not . isOOB) $ tail $ iterate (dec *** dec) (col, row)
+
+	finder (col, row) = '.' /= (input ! row) ! col
+	dec x = x - 1
 
 -- | foo
 --
@@ -65,8 +89,8 @@ solver rows cols input = fmap (count . fst) $ DL.find (uncurry (==)) $ zip frame
 -- [(2,1),(1,2),(1,1)]
 -- >>> adjacents 10 10 (3,0)
 -- [(4,1),(4,0),(3,1),(2,1),(2,0)]
-adjacents :: Int -> Int -> (Int, Int) -> [(Int, Int)]
-adjacents rows cols p@(col, row)
+adjacents' :: Int -> Int -> (Int, Int) -> [(Int, Int)]
+adjacents' rows cols p@(col, row)
 	| isOOB p = error $ "col or row OOB" ++ show (cols, rows, p)
 	| otherwise = filter (not . isOOB) $ fmap (\(a, b) -> (col-a, row-b)) $ filter (/=(0,0)) $ (,) <$> [-1..1] <*> [-1..1]
 	where
@@ -84,12 +108,32 @@ step rows cols input =
 		| counts(col, row) == 0 = '#'
 		| otherwise = 'L'
 	caser row (col, '#')
+		| counts(col, row) >= 5 = 'L'
+		| otherwise = '#'
+
+	-- count the num of ocp seats around
+	counts :: (Int, Int) -> Int
+	counts = length . filter (== '#') . fmap (\(col, row) -> (input ! row) ! col) . adjacents input rows cols
+
+-- | part 1
+step' :: Int -> Int -> Input -> Input
+step' rows cols input =
+	Vec.fromList $ fmap mapper $ zip [0..] $ Vec.toList input
+	where
+	mapper :: (Int, Vector Char) -> Vector Char
+	mapper (row, rowData) = Vec.fromList $ fmap (caser row ) $ zip [0..] $ Vec.toList rowData
+	caser :: Int -> (Int, Char) -> Char
+	caser _ (_, '.') = '.'
+	caser row (col, 'L')
+		| counts(col, row) == 0 = '#'
+		| otherwise = 'L'
+	caser row (col, '#')
 		| counts(col, row) >= 4 = 'L'
 		| otherwise = '#'
 
 	-- count the num of ocp seats around
 	counts :: (Int, Int) -> Int
-	counts = length . filter (== '#') . fmap (\(col, row) -> (input ! row) ! col) . adjacents rows cols
+	counts = length . filter (== '#') . fmap (\(col, row) -> (input ! row) ! col) . adjacents' rows cols
 
 showMap :: Input -> String
 showMap = unlines . fmap (DL.foldr (:) [] . Vec.toList) . Vec.toList
@@ -120,3 +164,5 @@ runSolution filePath = do
 			print (cols, rows)
 			putStrLn $ showMap input
 			print $ solver rows cols input
+
+-- 8229 too high
