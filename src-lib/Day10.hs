@@ -29,6 +29,7 @@ import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Either (isRight)
 import Data.Maybe (mapMaybe)
+import Data.Bool (bool)
 
 import Data.Vector (Vector, (!))
 import qualified Data.Vector as Vec
@@ -40,17 +41,15 @@ import qualified Control.Monad.State.Strict as State
 
 import qualified Control.Monad as CM
 
---import qualified Control.Foldl as L
+import qualified Control.Foldl as L
 
 type Input = Integer
 
 
-sum' :: Num a => [a] -> a
-sum' = DL.foldl' (+) 0
-
 type Mon = State (Map [Integer] Integer)
 
 -- Memoized working function. This is kind of brute force.
+-- But doesn't exploit the particular input.
 worker :: [Integer] -> Mon Integer
 worker input = do
 	m <- State.get
@@ -74,7 +73,7 @@ worker input = do
 		-- first
 		[_, _] -> (n +) <$> worker (drop 1 as)
 		-- There are three alternatives
-		-- Dropping the first (this includes optionally droping de second)
+		-- Dropping the first
 		-- Dropping droping the first and the second
 		-- So we add those cases
 		[_, _, _] -> (n +) <$> ( (+) <$> worker (drop 1 as) <*> worker (drop 2 as) )
@@ -88,25 +87,31 @@ solver' input = State.evalState (worker ordered) Map.empty
 	ordered =  (++[adapter]) $ (0:) $ DL.sort $ Vec.toList input
 	adapter = Vec.maximum input + 3
 
+-- This solution exploits particularities of the input outside the problem
+-- description
+solver'' input =
+	L.fold L.product $ fmap (mapper . length) $ filter ((==1) . head) $ DL.group diffs
+	where
+	-- How many ways are there to sum 4 using 1,2 and 3
+	mapper 4 = 7
+	mapper 3 = 4
+	mapper 2 = 2
+	mapper 1 = 1
+	diffs =  zipWith (-)  (tail ordered) ordered
+	ordered =  (++[adapter]) $ (0:) $ DL.sort $ Vec.toList input
+	adapter = Vec.maximum input + 3
+
 -- Could solve part 1
--- solver' input = traceShow ordered $
--- 	DL.foldl' folder (1, [], []) $ reverse ordered
--- 	where
--- 	folder :: (Integer, [Integer], [Integer]) -> Integer -> (Integer, [Integer], [Integer])
--- 	folder (1, [], []) last = (1, [last], [])
--- 
--- 	folder (n, abl, last) new = traceShow (n, new, suit, stillSuit)
--- 		--(n * fromIntegral (length suit - fromEnum stillSuit), new:abl, suit)
--- 		$ if stillSuit
--- 			then (n * 3, new:abl, suit)
--- 			else (n * fromIntegral (length suit - fromEnum stillSuit), new:abl, suit)
--- 		where
--- 		suit = takeWhile (<= new + 3) abl
--- 		stillSuit = not $ null $ drop 1 $ takeWhile (<= new + 3) last
--- 
--- 	diffs =  zipWith (-)  (tail ordered) ordered
--- 	ordered =  (++[adapter]) $ (0:) $ DL.sort $ Vec.toList input
--- 	adapter = Vec.maximum input + 3
+solver input = traceShow diffs $
+	uncurry (*) $ L.fold (L.Fold (\(c1, c3) d -> case d of
+		1 -> (c1 + 1, c3)
+		3 -> (c1, c3 + 1)
+		_ -> (c1, c3))
+		 (0 :: Integer, 0 :: Integer) id) diffs
+	where
+	diffs =  zipWith (-)  (tail ordered) ordered
+	ordered =  (++[adapter]) $ (0:) $ DL.sort $ Vec.toList input
+	adapter = Vec.maximum input + 3
 
 parseQ :: [String] -> Vector Integer
 parseQ = Vec.fromList . fmap read
@@ -114,7 +119,8 @@ parseQ = Vec.fromList . fmap read
 runSolution :: FilePath -> IO ()
 runSolution filePath = do
 	contents <- readFile filePath
-	print $ solver' $ parseQ $ lines contents
+	print $ solver $ parseQ $ lines contents
+	print $ solver'' $ parseQ $ lines contents
 	--case solver' 25 $ parseQ $ lines contents of
 	--	Nothing -> print "Part 1 failed"
 	--	Just part1 -> do
