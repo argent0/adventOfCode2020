@@ -50,8 +50,8 @@ type Input = Vector (Vector Char)
 
 -- Solve part 2
 solver rows cols input = fmap (count . fst) $ DL.find (uncurry (==)) $
-	--zip (fmap (\f -> trace (showMap f) f) frames) $ tail frames
-	zip frames $ tail frames
+	zip (fmap (\f -> trace (showMap f) f) frames) $ tail frames
+	--zip frames $ tail frames
 	where
 	frames = iterate (step rows cols) input
 	count :: Input -> Integer
@@ -96,12 +96,14 @@ adjacents' rows cols p@(col, row)
 	where
 	isOOB (col, row) =  col < 0 || row < 0 || col >= cols || row >= rows
 
+-- One step in the cellular automata
 step :: Int -> Int -> Input -> Input
 step rows cols input =
 	Vec.fromList $ fmap mapper $ zip [0..] $ Vec.toList input
 	where
 	mapper :: (Int, Vector Char) -> Vector Char
 	mapper (row, rowData) = Vec.fromList $ fmap (caser row ) $ zip [0..] $ Vec.toList rowData
+	-- The evolution rules
 	caser :: Int -> (Int, Char) -> Char
 	caser _ (_, '.') = '.'
 	caser row (col, 'L')
