@@ -11,6 +11,8 @@ import qualified Day07
 import qualified Day08
 import qualified Day09
 import qualified Day10
+import qualified Day11
+import qualified Day12
 import qualified System.Environment as SE
 
 main :: IO ()
@@ -25,4 +27,6 @@ main = SE.getArgs >>= \case
 	["08"] -> Day08.runSolution "input/Day08"
 	["09"] -> Day09.runSolution "input/Day09"
 	["10"] -> Day10.runSolution "input/Day10"
+	["11"] -> Day11.runSolution "input/Day11"
+	["12"] -> Day12.runSolution "input/Day12"
 	args -> error $ "Args were: " ++ show args
