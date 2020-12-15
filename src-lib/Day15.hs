@@ -2,6 +2,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE BangPatterns #-}
 
 module Day15 where
 
@@ -59,29 +60,30 @@ import qualified Data.List.NonEmpty as DLNE
 type Input = Integer
 
 solver input fTurn = State.evalState (code 6 (fromIntegral $ length input + 1)) $ -- turns start at length input + 1
-	Map.fromList $ zip input $ fmap (:|[]) [1..] --Insert the seed input with their order
+	Map.fromList $ zip input $ fmap (,Nothing) [1..] --Insert the seed input with their order
 	where
 	-- Monadic loop. Maybe avoid custom recursion
 	-- It returns the fTurn-th value
-	code :: Integer -> Integer -> State (Map Integer (NonEmpty Integer)) Integer
+	code :: Integer -> Integer -> State (Map Integer (Integer, Maybe Integer)) Integer
 	code prev turn
 		| turn > fTurn = pure prev
 		| otherwise =
 			-- Check is the previous value is repeated
 			State.get >>= \m -> case Map.lookup prev m of
-				Just (_:|[]) -> do --not repeated
-					State.modify (Map.insertWith inserter 0 (turn:|[]))
+				Just (_, Nothing) -> do --not repeated
+					State.modify (Map.insertWith inserter 0 (turn, Nothing))
 					code 0 (turn + 1)
-				Just (l:|[ll]) -> do -- repeated
-					State.modify (Map.insertWith inserter (l-ll) (turn:|[]))
+				Just (l, Just ll) -> do -- repeated
+					State.modify (Map.insertWith inserter (l-ll) (turn, Nothing))
 					code (l - ll) (turn + 1)
 
 	-- Update the map keeping the previous position
-	-- TODO: Use a tupple (Integer, Maybe Integer)
-	inserter :: NonEmpty Integer -> NonEmpty Integer -> NonEmpty Integer
-	inserter (new :| []) (prev :| _)
-		| new > prev =  new :| [prev]
-		| otherwise = error $ show (prev, new)
+	-- DONE: Use a tupple (Integer, Maybe Integer)
+	-- DONE: avoid error (removed safety check)
+	inserter :: (Integer, Maybe Integer) -> (Integer, Maybe Integer) -> (Integer, Maybe Integer)
+	inserter (!new, Nothing) (!prev, _) = (new, Just prev)
+		-- | new > prev =  (new, Just prev)
+		-- | otherwise = error $ show (prev, new)
 
 runSolution :: FilePath -> IO ()
 runSolution _ = do
