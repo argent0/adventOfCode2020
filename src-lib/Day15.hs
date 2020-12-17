@@ -2,7 +2,6 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE BangPatterns #-}
 
 module Day15 where
 
@@ -81,7 +80,7 @@ solver input fTurn = State.evalState (code 6 (fromIntegral $ length input + 1)) 
 	-- DONE: Use a tupple (Integer, Maybe Integer)
 	-- DONE: avoid error (removed safety check)
 	inserter :: (Integer, Maybe Integer) -> (Integer, Maybe Integer) -> (Integer, Maybe Integer)
-	inserter (!new, Nothing) (!prev, _) = (new, Just prev)
+	inserter (new, Nothing) (prev, _) = (new, Just prev)
 		-- | new > prev =  (new, Just prev)
 		-- | otherwise = error $ show (prev, new)
 
