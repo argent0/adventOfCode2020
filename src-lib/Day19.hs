@@ -31,34 +31,39 @@ data NDPAStates = P0 | P1 deriving (Show, Eq)
 
 data Output = T Char | NT Int deriving (Show, Eq)
 
-yield :: Vector Rule' -> String -> [Output] -> [(String, [Output])]
---yield rules ss [] = [(ss, [NT 0])]
-yield rules ss (NT a:os) = case rules ! a of
+yield :: Vector Rule' -> NDPAStates -> String -> [Output] -> [(NDPAStates, String, [Output])]
+
+-- Transition to P1 pushing the intial symbol of the grammar
+yield rules P0 ss [] = [(P1, ss, [NT 0])]
+
+-- Push x for every rule: NT a -> x
+yield rules P1 ss (NT a:os) = case rules ! a of
 	Union' (Concat' r11 r12 r1s) (Concat' r21 r22 r2s) ->
-		[ (ss, fmap NT (r11:r12:r1s) ++ os)
-		, (ss, fmap NT (r21:r22:r2s) ++ os) ]
+		[ (P1, ss, fmap NT (r11:r12:r1s) ++ os)
+		, (P1, ss, fmap NT (r21:r22:r2s) ++ os) ]
 	Union' (NonTerminal' r1) (NonTerminal' r2) ->
-		[ (ss, NT r1:os)
-		, (ss, NT r2:os) ]
+		[ (P1, ss, NT r1:os)
+		, (P1, ss, NT r2:os) ]
 	Union' (NonTerminal' r1) (Concat' r21 r22 r2s) ->
-		[ (ss, NT r1:os)
-		, (ss, fmap NT (r21:r22:r2s) ++ os) ]
-	Concat' r1 r2 rs -> [ (ss, fmap NT (r1:r2:rs) ++ os) ]
-	Terminal' c -> [(ss, T c:os)]
-	NonTerminal' n -> [(ss, NT n:os)]
+		[ (P1, ss, NT r1:os)
+		, (P1, ss, fmap NT (r21:r22:r2s) ++ os) ]
+	Concat' r1 r2 rs -> [ (P1, ss, fmap NT (r1:r2:rs) ++ os) ]
+	Terminal' c -> [(P1, ss, T c:os)]
+	NonTerminal' n -> [(P1, ss, NT n:os)]
 	un -> error $ show (a, un)
 
-yield rules [] (T _:os) = []
+-- Out of options
+yield rules P1 [] (T _:os) = []
 
-yield rules (s:ss) (T g:os)
-	| s == g = [(ss, os)]
+-- Continue if the terminal in the top matches the one at the begining of the
+-- string
+yield rules P1 (s:ss) (T g:os)
+	| s == g = [(P1, ss, os)]
 	| otherwise = []
 
-yield _ _ [] = []
-
-type Input = Integer
-
-solver input = input
+-- out of options
+yield _ P1 _ [] = []
+yield _ _ _ _ = []
 
 parseRules :: Parser (Vector Rule)
 parseRules = V.fromList . fmap snd . DL.sortOn fst <$> DAB.sepBy1' parseRule endOfLine
@@ -122,16 +127,16 @@ runSolution filePath = do
 			print $ DL.foldl' (+) 0 $ fmap (fromEnum . nonDet 1000 alternateRules) samples
 
 nonDet :: Int -> Vector Rule' -> String-> Bool
-nonDet maxIter rules input = or $ go maxIter input [NT 0]
+nonDet maxIter rules input = or $ go maxIter P0 input []
 	where
-	go :: Int -> String -> [Output] -> [Bool]
-	go 0 i o = error $ "Max iterations reached: " ++ input ++ ", " ++ i ++ ", " ++ show o
-	go n i o = --traceShow (i, o) $
+	go :: Int -> NDPAStates -> String -> [Output] -> [Bool]
+	go 0 p i o = error $ "Max iterations reached: " ++ show p ++ ", " ++ input ++ ", " ++ i ++ ", " ++ show o
+	go n p i o = --traceShow (i, o) $
 		do
-			(ni, no) <- yield rules i o
-			if ([], []) == (ni, no)
+			(p', ni, no) <- yield rules p i o
+			if (P1, [], []) == (p', ni, no)
 				then pure True
-				else go (n - 1) ni no
+				else go (n - 1) p' ni no
 
 
 -- Right
