@@ -49,6 +49,7 @@ evolve auto = DL.foldl' folder (Map.filter (=='#') evolvedActives) evoledInactiv
 	evolvedActives = Map.map actEvolverMapper activeNeighs
 	actEvolverMapper :: [L.V3 Int] -> Char
 	actEvolverMapper nghs
+		-- TODO: use elem [2,3]
 		| 2 == length (mapMaybe (`Map.lookup` auto) nghs) = '#'
 		| 3 == length (mapMaybe (`Map.lookup` auto) nghs) = '#'
 		| otherwise = '.'
@@ -75,6 +76,7 @@ evolve' auto = DL.foldl' folder (Map.filter (=='#') evolvedActives) evoledInacti
 	(actives, inactives) = Map.partition (=='#') auto
  
 neigh :: L.V3 Int -> [L.V3 Int]
+-- TODO: use (+ dx)
 neigh (L.V3 x y z) = fmap (\(L.V3 dx dy dz) -> L.V3 (x+dx) (y+dy) (z+dz)) $ filter (/=L.V3 0 0 0) $ L.V3 <$> [-1,0,1] <*> [-1,0,1] <*> [-1,0,1]
 
 -- part 2
