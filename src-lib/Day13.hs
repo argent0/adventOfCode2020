@@ -28,7 +28,7 @@ import qualified Data.Array.IArray as IA
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Either (isRight)
-import Data.Maybe (mapMaybe, catMaybes)
+import Data.Maybe (isJust, mapMaybe, catMaybes)
 import Data.Bool (bool)
 
 import Data.Vector (Vector, (!))
@@ -88,13 +88,13 @@ parseTimestamp = (Timestamp <$> decimal) <?> "Timestamp"
 --
 -- replacing in (1)
 --
--- n = bus_id * (m - q) - r
+-- 	n = bus_id * (m - q) - r
 --
--- So the smallest positive n happens when ( m - q) == 1 and is thus equal to
+-- So the smallest positive n happens when (m - q) == 1 and is thus equal to
 --
--- n_min = bus_id - r
+-- 	n_min = bus_id - r
 --
--- Returns Norhing in case the input is empty.
+-- Returns Norhing in case there are no bus lines.
 solver :: Timestamp -> [Input] -> Maybe Integer
 solver start input = do
 	-- Find the bus line with the earliest departure time.
@@ -108,49 +108,71 @@ solver start input = do
 	mapper :: BusId -> Integer
 	mapper bid = getBusId bid - ( getTimestamp start `mod` getBusId bid )
 
-solver' input = case input of
-	(Just firstLine : rest) ->
-		fmap mapper $
-			mapMaybe (uncurry ((<$>) . (,))) $ zip [1..] rest
+-- Write equations for part 2
+--
+-- For each bus_id, n_i is the departure time for the m_i-th departure
+--
+-- n_1 = bus_id_1 * m_1
+-- n_2 = bus_id_2 * m_2
+-- ...
+-- n_i = bus_id_i * m_i
+--
+-- Those departure times have to be consecutive so:
+--
+-- n_2 = n_1 + (ord_2 - ord_1)
+-- ...
+-- n_(i+1) = n_i + (ord_(i+1) - ord_i)
+--
+-- where ord_i is the order of the bus_id on the list. With ord_(i+1) > ord_i.
+--
+-- Applying this constrain we get:
+--
+-- n_1 = bus_id_1 * m_1
+-- n_1 + (ord_2 - ord_1) = bus_id_2 * m_2
+-- n_2 + (ord_3 - ord_2) = bus_id_3 * m_3
+-- ...
+-- n_i + (ord_(i+1) - ord_i) = bus_id_(i+1) * m_(i+1)
+--
+-- Leaving only n_1 we get:
+--
+-- n_1 = bus_id_1 * m_1
+-- n_1 + (ord_2 - ord_1) = bus_id_2 * m_2
+-- (n_1 + (ord_2 - ord_1)) + (ord_3 - ord_2) = bus_id_3 * m_3
+-- ...
+--
+-- The last equation becomes
+--
+-- n_1 + (ord_3 - ord_1) = bus_id_3 * m_3
+--
+-- So all the equations become
+--
+-- n_1 = bus_id_1 * m_1
+-- n_1 + (ord_2 - ord_1) = bus_id_2 * m_2
+-- n_1 + (ord_3 - ord_1) = bus_id_3 * m_3
+-- ...
+-- n_1 + (ord_i - ord_1) = bus_id_i * m_i
+--
+-- Next I rewrite them like:
+--
+-- n_1 - bus_id_1 * m_1 = 0
+-- n_1 + (ord_2 - ord_1) - bus_id_2 * m_2 = 0
+-- ...
+-- n_1 + (ord_i - ord_1) - bus_id_i * m_i = 0
+--
+-- Finally I replace n_1 in all the equations
+--
+-- bus_id_1 * m_1 + (ord_i - ord_1) - bus_id_i * m_i = 0
+--
+-- This equations can be stored using a 4-tuple
+--
+--	(bus_id_1, bus_id_i, (ord_i - ord_1), ord_i)
+--
+-- This functions just creates those 4-tuples to be further processed.
+solver' input = case catMaybes (zipWith (\x -> fmap (x,)) [1..] input) of
+	( (ord1, busId1) : rest) ->
+		(busId1, busId1, 0, ord1) : fmap mapper rest
 		where
-		mapper (order, lineId) = (lineId, firstLine, order)
-
---gen x = 13*(x - 23602961251) + 306838496270
-gen x = 13*x + 306838496270
-
-doer = DL.find finder $ codom gen
-	where
-	finder c = DL.all (==0) $ traceShowId $ fmap (\(p, o) -> (c*37 + o) `mod` p) known
-
---candidate =  case DL.sortBy (compare `on` ($ 0)) offset of
---		(b:rest) -> traceShow (take 100 $ codom b) $ finder (fmap codom rest) $ codom b
---	where
---	finder :: [[Integer]] -> [Integer] -> [Integer]
---	finder tops (c:cs) =
---		let new = fmap (dropWhile (<c)) $ tops
---		in if DL.all (==c) (fmap head new)
---			then fmap head new
---			else --traceShow (fmap (\x -> x - c) $ fmap head new) $
---				finder new cs
---	--finder :: [Integer -> Integer] -> Integer -> Bool
---	--finder rest x = traceShow x $ DL.all(==x) $ traceShowId $ mapMaybe (DL.find (>=x) . codom) rest
---	offset :: [Integer -> Integer]
---	offset = zipWith (\c g -> g . (+c)) cuts generators
---	cuts = fmap fst $ mapMaybe (findCut 0) generators
---	findCut v f = DL.find ((>=v) . snd) $ fmap (id &&& f) [0..]
---	--DL.find (DL.all (==0) . traceShowId . snd) $ fmap (\x -> (x, fmap ($ x) generators')) [1..]
-
-codom f = fmap f [0..]
-findCut v f = DL.find ((>=v) . snd) $ fmap (id &&& f) [0..]
-
-known = [ ( 41   , 27 ),( 433  , 37 ),( 23   , 45 ),( 17   , 54 ),
-	  ( 19   , 56),( 29   , 66 ),( 593  , 68 ),( 13   , 81 )]
---solveIDE :: Integer -> Integer -
---solveIDE a b c 
---	| c `mod` thisgcd == 0 = traceShow (a, b, c) $ Just (thisgcd, c)
---	| otherwise = Nothing
---	where
---	thisgcd = gcd a b
+		mapper (ordi, busIdi) = (busId1, busIdi, ordi - ord1, ordi)
 
 -- Sample input
 --
@@ -180,32 +202,16 @@ runSolution filePath = do
 			print $ solver start input
 
 			putStrLn "\nPart 2"
-			mapM_ (putStrLn . print2) $ solver' input
+			mapM_ (putStrLn . printEq) $ solver' input
 	where
-	print2 (lid, flid, o) =
-		show flid ++ " * x[0] - " ++
-		show lid ++ " * x[" ++ show o ++ "] + " ++
-		show o ++ " == 0"
+	-- Prints an equation to be solved.
+	printEq (flid, bid, delta, ordi) =
+		show (getBusId flid) ++ " * x[1] - " ++
+		show (getBusId bid) ++ " * x[" ++ show ordi ++ "] + " ++
+		show delta
 
 -- Wrong
 -- 1258
 
 -- Part 1:
 -- Answer = Just 410
-
--- The original version of solver for part 1. Harder to read.
---
--- solver :: Timestamp -> [Input] -> Maybe Integer
--- solver start input =
--- 	fmap ( uncurry (*) . -- Multiply the busId by the amount of minutes waited
--- 		(getBusId ***
--- 			-- Computes the time amount of minutes waited
--- 			subtract (getTimestamp start))) $
--- 	-- Find the earliest departure time among all the bus lines.
--- 	L.fold ( L.minimumBy (compare `on` snd) ) $
--- 	-- Find the earliest departure time after `start` for each bus line.
--- 	mapMaybe (>>= mapper) input
--- 	where
--- 	-- The Maybe arises from the find function.
--- 	mapper :: BusId -> Maybe (BusId, Integer)
--- 	mapper bid@(BusId n) = (bid,) <$> DL.find (>= getTimestamp start) (iterate (+n) 0)
