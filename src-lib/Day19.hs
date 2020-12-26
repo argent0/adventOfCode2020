@@ -34,7 +34,13 @@ data Rule t n
 type RuleSet t n = Map n (Rule t n)
 
 -- The states of the NDPA (Non deterministic push down automata)
-data NDPAState = P0 | P1 deriving (Show, Eq)
+data NDPAState
+	-- The initial state, its only function is to push the initial symbol on the stack
+	= P0
+	-- The other state, all transitions are P1 -> P1 and its also the acepting
+	-- state.
+	| P1
+	deriving (Show, Eq)
 
 -- The alphabet to be used in the NDPD's stack
 data Output t n
@@ -74,7 +80,8 @@ yield rules initialSymbol P0 ss [] = [(P1, (ss, [StackedNT initialSymbol]))]
 --
 -- Is use the non-total `fromJust` becasue all non termial symbols should be on
 -- the rule set.
-yield rules _ P1 ss (StackedNT a:os) = (\x -> (P1, (ss, x ++ os))) <$> ruleAlternatives (fromJust $ rules !? a)
+yield rules _ P1 ss (StackedNT a:os) =
+	(\x -> (P1, (ss, x ++ os))) <$> ruleAlternatives (fromJust $ rules !? a)
 
 -- Out of input and with a non-empty stack means there are no more options
 yield rules _ P1 [] (StackedT _:os) = []

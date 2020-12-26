@@ -1,4 +1,3 @@
-
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -8,7 +7,7 @@ import Control.Lens
 import Control.Lens.TH
 
 import qualified Data.ByteString as BS
-import Data.Attoparsec.ByteString (Parser)
+import Data.Attoparsec.ByteString (Parser, (<?>))
 import qualified Data.Attoparsec.ByteString as DAB
 import qualified Data.Attoparsec.ByteString.Char8 as DABC8
 import Data.Attoparsec.ByteString.Char8 (decimal, inClass, digit, endOfLine, char, anyChar, letter_ascii, notChar)
@@ -44,20 +43,38 @@ import qualified Control.Monad as CM
 
 import qualified Control.Foldl as L
 
-import Data.Bifunctor (bimap)
-
 import Data.Complex
 import Data.Functor
+import Data.Bifunctor (bimap)
 
-type Input = Maybe Integer
+-- Each input is the id of a bus line. Nothing means that the line, whatever its
+-- id was, is out of service.
+type Input = Maybe BusId
 
---solver :: Integer -> [Input] -> Maybe (Integer, Integer)
-solver start input =
-	fmap (uncurry (*)) $ fmap (second (\x -> x - start)) $
-	L.fold ( L.minimumBy (compare `on` snd) ) $ mapMaybe (>>= mapper) input
+newtype BusId = BusId { getBusId :: Integer } deriving Show
+
+-- Parases an unsigned decimal number
+parseBusId :: Parser BusId
+parseBusId = (BusId <$> decimal) <?> "BusId"
+
+newtype Timestamp = Timestamp { getTimestamp :: Integer } deriving Show
+
+parseTimestamp :: Parser Timestamp
+parseTimestamp = (Timestamp <$> decimal) <?> "Timestamp"
+
+solver :: Timestamp -> [Input] -> Maybe Integer
+solver start input = do
+	-- Find the bus line with the earliest departure time.
+	(busId, departureTime) <-
+		L.fold ( L.minimumBy (compare `on` snd) ) $
+		-- Find the earliest departure time after `start` for each bus line.
+		mapMaybe (>>= mapper) input
+
+	pure (getBusId busId * (departureTime - getTimestamp start))
 	where
-	mapper :: Integer -> Maybe (Integer, Integer)
-	mapper x = (x,) <$> DL.find (>= start) (iterate (+x) x)
+	-- The Maybe arises from the find function.
+	mapper :: BusId -> Maybe (BusId, Integer)
+	mapper bid@(BusId n) = (bid,) <$> DL.find (>= getTimestamp start) (iterate (+n) 0)
 
 solver' input = case input of
 	(Just firstLine : rest) ->
@@ -65,7 +82,6 @@ solver' input = case input of
 			mapMaybe (uncurry ((<$>) . (,))) $ zip [1..] rest
 		where
 		mapper (order, lineId) = (lineId, firstLine, order)
-
 
 --gen x = 13*(x - 23602961251) + 306838496270
 gen x = 13*x + 306838496270
@@ -104,21 +120,34 @@ known = [ ( 41   , 27 ),( 433  , 37 ),( 23   , 45 ),( 17   , 54 ),
 --	where
 --	thisgcd = gcd a b
 
-parseInput :: Parser (Integer, [Input])
+-- Sample input
+--
+-- 939
+-- 7,13,x,x,59,x,31,19
+--
+-- The x's represent lines that are out of service.
+parseInput :: Parser (Timestamp, [Input])
 parseInput =
 	( (,) <$>
-		(decimal <* endOfLine) <*>
-		(DAB.choice [Just <$> decimal, char 'x' $> Nothing] `DAB.sepBy1'` char ',') ) <* endOfLine
+		(parseTimestamp <* endOfLine) <*>
+		(DAB.choice
+			[ Just <$> parseBusId
+			, char 'x' $> Nothing ] `DAB.sepBy1'` char ',') ) <* endOfLine
 
 
 runSolution :: FilePath -> IO ()
 runSolution filePath = do
+	putStrLn "**Day 13**"
 	contents <- BS.readFile filePath
 	let parseResult = DAB.parseOnly parseInput contents
 	case parseResult of
 		Left err -> putStrLn $ "Error :" ++ err
 		Right (start, input) -> do
-			--print $ solver start input
+
+			putStrLn "Part 1"
+			print $ solver start input
+
+			putStrLn "\nPart 2"
 			mapM_ (putStrLn . print2) $ solver' input
 	where
 	print2 (lid, flid, o) =
@@ -128,3 +157,23 @@ runSolution filePath = do
 
 -- Wrong
 -- 1258
+
+-- Part 1:
+-- Answer = Just 410
+
+-- The original version of solver for part 1. Harder to read.
+--
+-- solver :: Timestamp -> [Input] -> Maybe Integer
+-- solver start input =
+-- 	fmap ( uncurry (*) . -- Multiply the busId by the amount of minutes waited
+-- 		(getBusId ***
+-- 			-- Computes the time amount of minutes waited
+-- 			subtract (getTimestamp start))) $
+-- 	-- Find the earliest departure time among all the bus lines.
+-- 	L.fold ( L.minimumBy (compare `on` snd) ) $
+-- 	-- Find the earliest departure time after `start` for each bus line.
+-- 	mapMaybe (>>= mapper) input
+-- 	where
+-- 	-- The Maybe arises from the find function.
+-- 	mapper :: BusId -> Maybe (BusId, Integer)
+-- 	mapper bid@(BusId n) = (bid,) <$> DL.find (>= getTimestamp start) (iterate (+n) 0)
