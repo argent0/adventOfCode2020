@@ -62,19 +62,51 @@ newtype Timestamp = Timestamp { getTimestamp :: Integer } deriving Show
 parseTimestamp :: Parser Timestamp
 parseTimestamp = (Timestamp <$> decimal) <?> "Timestamp"
 
+-- Solve part 1
+--
+-- forall n m : int,
+--
+-- 	start + n = bus_id * m
+--
+-- n is the waiting time for the m-th departure of `bus_id`. This can be
+-- rearranged as:
+--
+-- 	(1)	n = bus_id * m - start
+--
+-- `start` can be rewriten in terms of `bus_id`:
+--
+-- 	start = bus_id * q + r
+--
+-- where
+--
+-- 	q = start / bus_id
+-- 	r = start % bus_id
+--
+-- with
+--
+-- 	r < bus_id
+--
+-- replacing in (1)
+--
+-- n = bus_id * (m - q) - r
+--
+-- So the smallest positive n happens when ( m - q) == 1 and is thus equal to
+--
+-- n_min = bus_id - r
+--
+-- Returns Norhing in case the input is empty.
 solver :: Timestamp -> [Input] -> Maybe Integer
 solver start input = do
 	-- Find the bus line with the earliest departure time.
 	(busId, departureTime) <-
 		L.fold ( L.minimumBy (compare `on` snd) ) $
-		-- Find the earliest departure time after `start` for each bus line.
-		mapMaybe (>>= mapper) input
+		(id &&& mapper) <$> catMaybes input
 
-	pure (getBusId busId * (departureTime - getTimestamp start))
+	pure (getBusId busId * departureTime)
 	where
-	-- The Maybe arises from the find function.
-	mapper :: BusId -> Maybe (BusId, Integer)
-	mapper bid@(BusId n) = (bid,) <$> DL.find (>= getTimestamp start) (iterate (+n) 0)
+	-- Compute the earliest departure time after `start` for a bus line.
+	mapper :: BusId -> Integer
+	mapper bid = getBusId bid - ( getTimestamp start `mod` getBusId bid )
 
 solver' input = case input of
 	(Just firstLine : rest) ->
