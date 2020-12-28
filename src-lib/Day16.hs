@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase #-}
 module Day16 ( runSolution) where
 
 import qualified Data.ByteString as BS
@@ -14,6 +15,11 @@ import Control.Lens
 import Data.Function (on)
 import Control.Arrow
 
+-- Remmaining issues:
+--
+-- All tickets should have the same number of fields.
+-- There should be as many rules are there are fields.
+
 type Ticket = NonEmpty Int
 type Input = NonEmpty Ticket
 data Rule = Rule String (Int, Int) (Int, Int) deriving Show
@@ -28,48 +34,61 @@ solver :: NonEmpty Rule -> Input -> Int
 solver rules = L.fold (L.premap (L.fold L.sum) L.sum) . fmap (extractInvalid rules)
 
 -- | Solver part 2
-solver2 :: NonEmpty Rule -> Input -> Ticket -> Int
-solver2 rules input ticket =
-	-- Compute the product of the extracted fields
-	L.fold L.product $
-	-- Extract the fields of `ticket`
-	fmap fst $
-	-- Only keep the fields that start with "departure"
-	filter (DL.isPrefixOf "departure" . (^. ruleName) . snd) $
-	-- Zip the `ticket` with the sorted rules
-	zip (DLNE.toList ticket) $
-	-- Sort the rules by field order
-	fmap fst $ DL.sortBy (compare `on` snd) $
-	-- Unfold the list of (Rule -> Column) matchings
-	DL.unfoldr unfold $
-	-- Sort the rules, putting the one with the least posible matching columns
-	-- first
-	DL.sortBy (compare `on` (length . snd)) $
-	-- Group rules together
-	fmap mapper $ DL.groupBy ((==) `on` ( (^. ruleName) . fst)) $
-	-- Only keep the rule and the matching column
-	fmap (fst &&& fst . snd) $
-	-- Only keep the (Rule, Column) pairs where all column elements satisfy the
-	-- rule.
-	DLNE.filter (snd . snd) $
-	-- Compute if a Rule matches a column for all combinations of rules and
-	-- columns.
-	(\r (cn, c) -> (r, (cn, all (matchRule r) c))) <$> rules <*> DLNE.zip (1 :| [2..]) cols
+--
+-- The list araises from the fact that there could be many possible valid
+-- assignments (Rule -> Column)
+solver2 :: NonEmpty Rule -> Input -> Ticket -> [Int]
+solver2 rules input ticket = case validTickes of
+	[] -> []
+	(t : ts) ->
+		-- Map over all posible valid assignments (Rule -> Column)
+		fmap (
+			-- Compute the product of the extracted fields
+			L.fold L.product .
+			-- Extract the fields of `ticket`
+			fmap fst .
+			-- Only keep the fields that start with "departure"
+			filter (DL.isPrefixOf "departure" . (^. ruleName) . snd) .
+			-- Zip the `ticket` with the sorted rules
+			zip (DLNE.toList ticket) .
+			-- Sort the rules by field order
+			fmap fst . DL.sortBy (compare `on` snd)
+		) $
+		-- Unfold the list of (Rule -> Column) matchings. All valid alternatives.
+		unfoldrM unfold $
+		-- Sort the rules, putting the one with the least posible matching columns
+		-- first
+		DL.sortBy (compare `on` (length . snd)) $
+		-- Group rules together
+		fmap mapper $ DL.groupBy ((==) `on` ( (^. ruleName) . fst)) $
+		-- Only keep the rule and the matching column
+		fmap (fst &&& fst . snd) $
+		-- Only keep the (Rule, Column) pairs where all column elements satisfy the
+		-- rule.
+		DLNE.filter (snd . snd) $
+		-- Compute if a Rule matches a column for all combinations of rules and
+		-- columns.
+		(\r (cn, c) -> (r, (cn, all (matchRule r) c))) <$> rules <*> DLNE.zip (1 :| [2..]) cols
+
+		where
+		unfold :: [(Rule, [Int])] -> [Maybe ((Rule, Int), [(Rule, [Int])])]
+		unfold [] = [Nothing]
+		-- It can have multiple alternatives
+		--
+		-- This assigns rule r to each column c in cs.
+		-- Then remove the option c from all the remaining rules.
+		--
+		-- If there are no options for a rule then there is no valid alternative
+		unfold ((r, []) : rest) = []
+		unfold ((r, cs@(_ : _)) : rest) = fmap (\c -> Just
+			( (r, c)
+			, DL.sortBy (compare `on` (length . snd)) $ fmap (second $ filter (/=c))  rest))
+			cs
+		mapper :: [(Rule, Int)] -> (Rule, [Int])
+		mapper ((rule, h):rest) = (rule, h: fmap snd rest)
+		cols = columns (t :| ts)
+
 	where
-	unfold :: [(Rule, [Int])] -> Maybe ((Rule, Int), [(Rule, [Int])])
-	unfold [] = Nothing
-	-- It can have multiple options here (but this code fails in that case)
-	-- perhaps unfoldrM for the list monad.
-	--
-	-- This assigns rule r to column c when there is only one posibility,
-	-- Then remove the option c from all the remaining rules.
-	unfold ((r, [c]):rest) = Just
-		( (r, c)
-		, DL.sortBy (compare `on` (length . snd)) $ fmap (second $ filter (/=c))  rest)
-	mapper :: [(Rule, Int)] -> (Rule, [Int])
-	mapper ((rule, h):rest) = (rule, h: fmap snd rest)
-	-- Will fail if there are no valid tickets
-	cols = columns (DLNE.fromList validTickes)
 	validTickes = DLNE.filter (isValid rules) input
 
 -- | Whether a value staisfies a rule
@@ -127,3 +146,11 @@ runSolution filePath = do
 		Right (rules, yourTicket, input) -> do
 			print $ solver rules input
 			print $ solver2 rules input yourTicket
+
+-- | unfoldr in a monad.
+--
+-- This is missing from Data.List
+unfoldrM :: Monad m => (a -> m (Maybe (b, a))) -> a -> m [b]
+unfoldrM f a = f a >>= \case
+	Nothing -> pure []
+	Just (b, a') -> (b :) <$> unfoldrM f a'
