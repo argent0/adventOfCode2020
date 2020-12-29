@@ -76,6 +76,7 @@ library
                        , containers ^>= 0.6
                        , split ^>= 0.2
                        , foldl ^>= 1.4
+                       , boxes ^>= 0.1
 
   -- Directories containing source files.
   hs-source-dirs:      src-lib

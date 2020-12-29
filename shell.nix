@@ -4,7 +4,7 @@ let
 
   inherit (nixpkgs) pkgs;
 
-  f = { mkDerivation, array, attoparsec, base, bytestring
+  f = { mkDerivation, array, attoparsec, base, boxes, bytestring
       , containers, doctest, foldl, lens, linear, mtl, recursion-schemes
       , split, stdenv, text, vector
       }:
@@ -15,8 +15,8 @@ let
         isLibrary = true;
         isExecutable = true;
         libraryHaskellDepends = [
-          array attoparsec base bytestring containers doctest foldl lens
-          linear mtl recursion-schemes split text vector
+          array attoparsec base boxes bytestring containers doctest foldl
+          lens linear mtl recursion-schemes split text vector
         ];
         executableHaskellDepends = [ attoparsec base bytestring ];
         testHaskellDepends = [ base ];

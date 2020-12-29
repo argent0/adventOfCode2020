@@ -1,6 +1,6 @@
-{ mkDerivation, array, attoparsec, base, bytestring, containers
-, doctest, foldl, lens, linear, mtl, recursion-schemes, split
-, stdenv, text, vector
+{ mkDerivation, array, attoparsec, base, boxes, bytestring
+, containers, doctest, foldl, lens, linear, mtl, recursion-schemes
+, split, stdenv, text, vector
 }:
 mkDerivation {
   pname = "adventOfCode2020";
@@ -9,8 +9,8 @@ mkDerivation {
   isLibrary = true;
   isExecutable = true;
   libraryHaskellDepends = [
-    array attoparsec base bytestring containers doctest foldl lens
-    linear mtl recursion-schemes split text vector
+    array attoparsec base boxes bytestring containers doctest foldl
+    lens linear mtl recursion-schemes split text vector
   ];
   executableHaskellDepends = [ attoparsec base bytestring ];
   testHaskellDepends = [ base ];
