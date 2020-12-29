@@ -1,4 +1,3 @@
-
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TupleSections #-}
@@ -11,8 +10,7 @@ import Data.Attoparsec.ByteString (Parser)
 import qualified Data.Attoparsec.ByteString as DAB
 import Data.Attoparsec.ByteString.Char8 (anyChar, space, notChar, decimal, string, char, endOfLine)
 
-import Data.Array.IArray (Array)
-import Data.Array.IArray ((!))
+import Data.Array.IArray (Array, (!))
 import qualified Data.Array.IArray as IA
 import qualified Data.Complex as DC
 import qualified Linear as L
@@ -33,6 +31,7 @@ type Piece = (Int, Picture)
 type FittingRow = [Piece]
 type FittingPuzzle = [FittingRow]
 
+-- | Build a solution adding pieces to the right
 topLeftSolution :: (Int, Picture) -> [(Int, [Picture])] -> [FittingRow]
 topLeftSolution topLeft [] = [[topLeft]]
 topLeftSolution topLeft@(_, topLeftPic) pieces@(_ : _) = [topLeft] : do
@@ -43,6 +42,7 @@ topLeftSolution topLeft@(_, topLeftPic) pieces@(_ : _) = [topLeft] : do
 	filterSideMatchs :: (Int, [Picture]) -> [(Int, Picture)]
 	filterSideMatchs (pid, trans) = (pid,) <$> filter (match Sideways topLeftPic) trans
 
+-- | Build a solution adding pieces to the left
 topRightSolution :: (Int, Picture) -> [(Int, [Picture])] -> [FittingRow]
 topRightSolution topRight [] = [[topRight]]
 topRightSolution topRight@(_, topRightPic) pieces@(_ : _) = [topRight] : do
@@ -53,6 +53,7 @@ topRightSolution topRight@(_, topRightPic) pieces@(_ : _) = [topRight] : do
 	filterSideMatchs :: (Int, [Picture]) -> [(Int, Picture)]
 	filterSideMatchs (pid, trans) = (pid,) <$> filter (\t -> match Sideways t topRightPic) trans
 
+-- | Build a solution adding pieces to both sides
 topMiddleSolution :: (Int, Picture) -> [(Int, [Picture])] -> [FittingRow]
 topMiddleSolution topCenter@(_, topCenterPic) pieces = [topCenter] : do
 	leftPiece <- pieces >>= filterLeftMatches
@@ -73,6 +74,7 @@ topMiddleSolution topCenter@(_, topCenterPic) pieces = [topCenter] : do
 	filterRightMatches :: (Int, [Picture]) -> [(Int, Picture)]
 	filterRightMatches (pid, trans) = (pid,) <$> filter (\t -> match Sideways t topCenterPic) trans
 
+-- | Build a solution adding a new row at the bottom
 bottomSolution :: FittingRow -> [(Int, [Picture])] -> [FittingPuzzle]
 bottomSolution topRow [] = [[topRow]]
 bottomSolution topRow@(t : ts) pieces@(_ : _) = [topRow] : do
@@ -91,6 +93,7 @@ bottomSolution topRow@(t : ts) pieces@(_ : _) = [topRow] : do
 	filterSideMatches :: Picture -> (Int, [Picture]) -> (Int, [Picture])
 	filterSideMatches refPic (pid, trans) = (pid, filter (match Sideways refPic) trans)
 
+-- | Build a row at the bottom of another.
 bottomRowSolution :: FittingRow -> Piece -> [(Int, [Picture])] -> [FittingRow]
 bottomRowSolution [] bottomPiece _ = [[bottomPiece]]
 bottomRowSolution topRow bottomPiece [] = [[bottomPiece]]
@@ -105,6 +108,9 @@ bottomRowSolution topRow@(t : ts) bottomPiece pieces@(_ : _) = [bottomPiece] : d
 
 	filterSideMatches :: Picture -> (Int, [Picture]) -> (Int, [Picture])
 	filterSideMatches refPic (pid, trans) = (pid, filter (match Sideways refPic) trans)
+
+-- TODO: Build a solution upwards.
+-- TODO: Build a solution for a row in the middle.
 
 removePiece :: Piece -> [(Int, [Picture])] -> [(Int, [Picture])]
 removePiece piece = filter ((/= fst piece) . fst)
@@ -141,8 +147,13 @@ match relPos refPic testPic = and $ case relPos of
 -- All unique transformations of the picture
 transforms :: Picture -> [Picture]
 transforms basePic =
-	Set.toList $ Set.fromList $ rotations ++ ( (🤸) <$> [Vertical, Horizontal] <*> rotations )
+	-- try to exploit the picture's symmetry. Flip symmetries.
+	Set.toList $ Set.fromList $ 
+	-- An Horizontal flip is a Vertical flip and a 180 degree rotation.
+	rotations ++ ( (Vertical 🤸) <$> rotations )
 	where
+	-- try to exploit the picture's symmetry. Stop ASAP. 90 degree rotation or
+	-- 180 degree rotation symmetry
 	rotations = basePic : takeWhile (/= basePic) (tail $ iterate (ClockWise 🥏) basePic )
 
 -- | Parse the input into a 2D map of chars using a default character if some
