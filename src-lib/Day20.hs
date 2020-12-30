@@ -48,7 +48,7 @@ topRightSolution topRight [] = [[topRight]]
 topRightSolution topRight@(_, topRightPic) pieces@(_ : _) = [topRight] : do
 	sidePiece <- pieces >>= filterSideMatchs
 	sideSolution <- topRightSolution sidePiece (removePiece sidePiece pieces)
-	pure $ topRight : sideSolution
+	pure $ sideSolution ++ [topRight]
 	where
 	filterSideMatchs :: (Int, [Picture]) -> [(Int, Picture)]
 	filterSideMatchs (pid, trans) = (pid,) <$> filter (\t -> match Sideways t topRightPic) trans
@@ -75,42 +75,73 @@ topMiddleSolution topCenter@(_, topCenterPic) pieces = [topCenter] : do
 	filterRightMatches (pid, trans) = (pid,) <$> filter (\t -> match Sideways t topCenterPic) trans
 
 -- | Build a solution adding a new row at the bottom
-bottomSolution :: FittingRow -> [(Int, [Picture])] -> [FittingPuzzle]
-bottomSolution topRow [] = [[topRow]]
-bottomSolution topRow@(t : ts) pieces@(_ : _) = [topRow] : do
+downwardSolution :: FittingRow -> [(Int, [Picture])] -> [FittingPuzzle]
+downwardSolution _ [] = [[]]
+downwardSolution (t : ts) pieces@(_ : _) = [] : do
 	bottomPiece <- pieces >>= filterBelowMatches
 	bsol <- bottomRowSolution ts bottomPiece
 		(filter (not . null . snd) $ removePiece bottomPiece pieces)
-	CM.guard (length bsol == 12)
-	[topRow, bsol] : do
+	CM.guard (length (bottomPiece : bsol) == 12)
+	[bottomPiece : bsol] : do
 		let remPieces = DL.foldl' (flip removePiece) pieces (bottomPiece : bsol)
-		bsol' <- bottomSolution bsol remPieces
-		[ topRow : bsol' ]
+		bsol' <- downwardSolution (bottomPiece : bsol) remPieces
+		[ (bottomPiece : bsol) : bsol']
 	where
 
 	filterBelowMatches (pid, trans) = (pid,) <$> filter (match Below (snd t)) trans 
-
-	filterSideMatches :: Picture -> (Int, [Picture]) -> (Int, [Picture])
-	filterSideMatches refPic (pid, trans) = (pid, filter (match Sideways refPic) trans)
 
 -- | Build a row at the bottom of another.
 bottomRowSolution :: FittingRow -> Piece -> [(Int, [Picture])] -> [FittingRow]
-bottomRowSolution [] bottomPiece _ = [[bottomPiece]]
-bottomRowSolution topRow bottomPiece [] = [[bottomPiece]]
-bottomRowSolution topRow@(t : ts) bottomPiece pieces@(_ : _) = [bottomPiece] : do
+bottomRowSolution [] _ _ = [[]]
+bottomRowSolution _ _ [] = [[]]
+bottomRowSolution (t : ts) bottomPiece pieces@(_ : _) = [] : do
 	candidate <- pieces >>= filterBelowMatches
 	CM.guard (match Sideways (snd bottomPiece) (snd candidate))
 	candidateSolution <- bottomRowSolution ts candidate (removePiece candidate pieces)
-	pure $ bottomPiece : candidateSolution
+	pure $ candidate : candidateSolution
 	where
 
-	filterBelowMatches (pid, trans) = (pid,) <$> filter (match Below (snd t)) trans 
-
-	filterSideMatches :: Picture -> (Int, [Picture]) -> (Int, [Picture])
-	filterSideMatches refPic (pid, trans) = (pid, filter (match Sideways refPic) trans)
+	filterBelowMatches (pid, trans) = (pid,) <$> filter (match Below (snd t)) trans
 
 -- TODO: Build a solution upwards.
 -- TODO: Build a solution for a row in the middle.
+
+-- | Build a solution adding a new row on the top
+upwardSolution :: FittingRow -> [(Int, [Picture])] -> [FittingPuzzle]
+upwardSolution _ [] = [[]]
+upwardSolution (b : bs) pieces@(_ : _) = [] : do
+	topPiece <- pieces >>= filterUpwardsMatches
+	tsol <- topRowSolution bs topPiece
+		(filter (not . null . snd) $ removePiece topPiece pieces)
+	CM.guard (length (topPiece : tsol) == 12)
+	[topPiece : tsol] : do
+		let remPieces = DL.foldl' (flip removePiece) pieces (topPiece : tsol)
+		tsol' <- upwardSolution (topPiece : tsol) remPieces
+		[tsol' ++ [topPiece : tsol]]
+	where
+
+	filterUpwardsMatches (pid, trans) = (pid,) <$> filter (\t -> match Below t (snd b)) trans
+
+-- | Build a row on the top of another.
+topRowSolution :: FittingRow -> Piece -> [(Int, [Picture])] -> [FittingRow]
+topRowSolution [] _ _ = [[]]
+topRowSolution _ _ [] = [[]]
+topRowSolution topRow@(b : bs) topPiece pieces@(_ : _) = [] : do
+	candidate <- pieces >>= filterUpwardsMatches
+	CM.guard (match Sideways (snd topPiece) (snd candidate))
+	[candidate] : do
+		candidateSolution <- topRowSolution bs candidate (removePiece candidate pieces)
+		pure $ candidate : candidateSolution
+	where
+
+	filterUpwardsMatches (pid, trans) = (pid,) <$> filter (\t -> match Below t (snd b)) trans
+
+middleRowSolution :: FittingRow -> [(Int, [Picture])] -> [FittingPuzzle]
+middleRowSolution middleRow pieces = [middleRow] : do
+	ts <- upwardSolution middleRow pieces
+	let remPieces = DL.foldl' (flip removePiece) pieces (concat ts)
+	bs <- downwardSolution middleRow remPieces
+	pure $ ts ++ [middleRow] ++ bs
 
 removePiece :: Piece -> [(Int, [Picture])] -> [(Int, [Picture])]
 removePiece piece = filter ((/= fst piece) . fst)
@@ -118,13 +149,11 @@ removePiece piece = filter ((/= fst piece) . fst)
 solver input = case transformed of
 	[] -> []
 	(p : ps) -> do
-		-- p is on the top left corner
-		--topRow <- topLeftSolution (second head p) ps ++ topMiddleSolution (second head p) ps
 		trans <- snd p
 		topRow <- topMiddleSolution (fst p, trans) ps
 		CM.guard (length topRow == 12)
 		let remPieces = DL.foldl' (flip removePiece) (p : ps) topRow
-		bs <- bottomSolution topRow remPieces
+		bs <- middleRowSolution topRow remPieces
 		CM.guard (length bs == 12)
 		pure bs
 
@@ -189,15 +218,13 @@ runSolution filePath = do
 	case parseResult of
 		Left err -> putStrLn $ "Error :" ++ err
 		Right input -> do
-			let pinput = (DL.permutations input)
-			CM.forM_ (fmap solver pinput) $ \ pzl -> do
-				CM.forM_ pzl $ \ pzl' -> do
-					putStrLn $ Boxes.render $ puzzleLines pzl'
-					putStrLn "-- End Solution --"
+			CM.forM_ (take 1 $ solver input) $ \ pzl -> do
+				putStrLn $ Boxes.render $ puzzleLines pzl
+				putStrLn "-- End Solution --"
 	putStrLn "Done"
 
 puzzleLines :: FittingPuzzle -> Boxes.Box
-puzzleLines pzl = Boxes.vsep 1 Boxes.left pls
+puzzleLines pzl = Boxes.vsep 0 Boxes.left pls
 	where
 	pls = fmap (Boxes.hsep 1 Boxes.top) $ fmap pieceLines <$> pzl
 
