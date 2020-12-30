@@ -27,28 +27,60 @@ import Debug.Trace
 
 type Picture = Array (L.V2 Int) Char
 type Piece = (Int, Picture)
--- One list of pieces per line
+
+-- A `FittingRow` is a list of pieces that fit side by side in an horizontal
+-- line.
 type FittingRow = [Piece]
+
+-- A `FittingPuzzle` is a list of rows where each row matches the one above and
+-- below.
 type FittingPuzzle = [FittingRow]
 
 -- | Build a solution adding pieces to the right
-topLeftSolution :: (Int, Picture) -> [(Int, [Picture])] -> [FittingRow]
-topLeftSolution topLeft [] = [[topLeft]]
-topLeftSolution topLeft@(_, topLeftPic) pieces@(_ : _) = [topLeft] : do
-	sidePiece <- pieces >>= filterSideMatchs
-	sideSolution <- topLeftSolution sidePiece (removePiece sidePiece pieces)
-	pure $ topLeft : sideSolution
+--
+-- For example, starting with P0 it adds P1 onwards where
+-- P1 matches the *right* edge of P0.
+--
+-- P0 P1 P2 P3
+--
+-- It returns all posibilities. That is
+--
+-- [] : Don't add more pieces
+-- [P1] : Just add P1
+-- [P1, P2] : Just add P1 and P2
+-- ...
+--
+-- This leaves free pieces to build other parts of the solution. E.g: to the
+-- right of P0.
+
+topRightwardSolution :: (Int, Picture) -> [(Int, [Picture])] -> [FittingRow]
+topRightwardSolution (_, topLeftPic) pieces = unfoldrM unfolder (topLeftPic, pieces)
 	where
-	filterSideMatchs :: (Int, [Picture]) -> [(Int, Picture)]
-	filterSideMatchs (pid, trans) = (pid,) <$> filter (match Sideways topLeftPic) trans
+	unfolder :: (Picture, [(Int, [Picture])]) -> [Maybe (Piece, (Picture, [(Int, [Picture])]))]
+	-- `refPic` is the picture the next piece should fit on the side.
+	-- `pieces` are the remmaining unused pieces
+	--
+	-- The alternatives are:
+	-- 	Stop
+	-- 	One alternative for each piece that matches the refPic on the side.
+	unfolder (refPic, pieces) = (Nothing :) $
+		fmap
+			(\sidePiece -> Just (sidePiece,
+				( snd sidePiece -- The next refPic
+				, removePiece sidePiece pieces))) -- The next pieces
+			(concatMap filterSideMatchs pieces)
+
+		where
+		filterSideMatchs :: (Int, [Picture]) -> [(Int, Picture)]
+		filterSideMatchs (pid, trans) = (pid,) <$> filter (match Sideways refPic) trans
 
 -- | Build a solution adding pieces to the left
-topRightSolution :: (Int, Picture) -> [(Int, [Picture])] -> [FittingRow]
-topRightSolution topRight [] = [[topRight]]
-topRightSolution topRight@(_, topRightPic) pieces@(_ : _) = [topRight] : do
+topLeftwardSolution :: (Int, Picture) -> [(Int, [Picture])] -> [FittingRow]
+topLeftwardSolution _ [] = [[]]
+topLeftwardSolution (_, topRightPic) pieces@(_ : _) = [] : do
 	sidePiece <- pieces >>= filterSideMatchs
-	sideSolution <- topRightSolution sidePiece (removePiece sidePiece pieces)
-	pure $ sideSolution ++ [topRight]
+	sideSolution <- topLeftwardSolution sidePiece (removePiece sidePiece pieces)
+	pure $ sideSolution  ++ [sidePiece]
 	where
 	filterSideMatchs :: (Int, [Picture]) -> [(Int, Picture)]
 	filterSideMatchs (pid, trans) = (pid,) <$> filter (\t -> match Sideways t topRightPic) trans
@@ -61,12 +93,12 @@ topMiddleSolution topCenter@(_, topCenterPic) pieces = [topCenter] : do
 
 	let remPieces = removePiece rightPiece (removePiece leftPiece pieces)
 
-	leftSolution <- topLeftSolution leftPiece remPieces
+	leftSolution <- topRightwardSolution leftPiece remPieces
 
-	rightSolution <- topRightSolution rightPiece $
+	rightSolution <- topLeftwardSolution rightPiece $
 		DL.foldl' (flip removePiece) remPieces leftSolution
 
-	pure (rightSolution ++ [topCenter] ++ leftSolution)
+	pure (rightSolution ++ [rightPiece, topCenter, leftPiece] ++ leftSolution)
 	where
 	filterLeftMatches :: (Int, [Picture]) -> [(Int, Picture)]
 	filterLeftMatches (pid, trans) = (pid,) <$> filter (match Sideways topCenterPic) trans
@@ -102,9 +134,6 @@ bottomRowSolution (t : ts) bottomPiece pieces@(_ : _) = [] : do
 	where
 
 	filterBelowMatches (pid, trans) = (pid,) <$> filter (match Below (snd t)) trans
-
--- TODO: Build a solution upwards.
--- TODO: Build a solution for a row in the middle.
 
 -- | Build a solution adding a new row on the top
 upwardSolution :: FittingRow -> [(Int, [Picture])] -> [FittingPuzzle]
@@ -284,3 +313,11 @@ data FlipAxis = Vertical | Horizontal deriving Show
 	fxlim :: Float
 	fylim :: Float
 	(fxlim, fylim) = (fromIntegral (xlim - 1) / 2, fromIntegral (ylim - 1) / 2)
+
+-- | unfoldr in a monad.
+--
+-- This is missing from Data.List
+unfoldrM :: Monad m => (a -> m (Maybe (b, a))) -> a -> m [b]
+unfoldrM f a = f a >>= \case
+	Nothing -> pure []
+	Just (b, a') -> (b :) <$> unfoldrM f a'
