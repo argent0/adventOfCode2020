@@ -36,12 +36,14 @@ type FittingRow = [Piece]
 -- below.
 type FittingPuzzle = [FittingRow]
 
+data GrowthDirection = ToTheLeft | ToTheRight deriving Show
+
 -- | Build a solution adding pieces to the right
 --
 -- For example, starting with P0 it adds P1 onwards where
 -- P1 matches the *right* edge of P0.
 --
--- P0 P1 P2 P3
+-- (P0) P1 P2 P3
 --
 -- It returns all posibilities. That is
 --
@@ -51,10 +53,24 @@ type FittingPuzzle = [FittingRow]
 -- ...
 --
 -- This leaves free pieces to build other parts of the solution. E.g: to the
--- right of P0.
-
-topRightwardSolution :: (Int, Picture) -> [(Int, [Picture])] -> [FittingRow]
-topRightwardSolution (_, topLeftPic) pieces = unfoldrM unfolder (topLeftPic, pieces)
+-- left of P0.
+--
+-- It doesn't include the starting piece (P0)
+--
+-- if GrowthDirection is ToTheLeft. P1 fits to the left of P0
+--
+-- P1 (P0)
+--
+-- regardless the resulting rows are in reverse order. That is for:
+--
+-- P3 P2 P1 (P0)
+--
+-- the output is [[],[P1],[P1,P2],[P1,P2,P3]]
+--
+-- This means that in this case the alternatives shouls be reversed to be
+-- displayed in the correct order.
+topHorizontalSolution :: GrowthDirection -> Piece -> [(Int, [Picture])] -> [FittingRow]
+topHorizontalSolution growthDir (_, topLeftPic) pieces = unfoldrM unfolder (topLeftPic, pieces)
 	where
 	unfolder :: (Picture, [(Int, [Picture])]) -> [Maybe (Piece, (Picture, [(Int, [Picture])]))]
 	-- `refPic` is the picture the next piece should fit on the side.
@@ -69,42 +85,37 @@ topRightwardSolution (_, topLeftPic) pieces = unfoldrM unfolder (topLeftPic, pie
 				( snd sidePiece -- The next refPic
 				, removePiece sidePiece pieces))) -- The next pieces
 			(concatMap filterSideMatchs pieces)
-
 		where
-		filterSideMatchs :: (Int, [Picture]) -> [(Int, Picture)]
-		filterSideMatchs (pid, trans) = (pid,) <$> filter (match Sideways refPic) trans
 
--- | Build a solution adding pieces to the left
-topLeftwardSolution :: (Int, Picture) -> [(Int, [Picture])] -> [FittingRow]
-topLeftwardSolution _ [] = [[]]
-topLeftwardSolution (_, topRightPic) pieces@(_ : _) = [] : do
-	sidePiece <- pieces >>= filterSideMatchs
-	sideSolution <- topLeftwardSolution sidePiece (removePiece sidePiece pieces)
-	pure $ sideSolution  ++ [sidePiece]
-	where
-	filterSideMatchs :: (Int, [Picture]) -> [(Int, Picture)]
-	filterSideMatchs (pid, trans) = (pid,) <$> filter (\t -> match Sideways t topRightPic) trans
+		filterSideMatchs :: (Int, [Picture]) -> [(Int, Picture)]
+		filterSideMatchs (pid, trans) = (pid,) <$> filter selector trans
+
+		selector = case growthDir of
+			ToTheRight -> match Sideways refPic
+			ToTheLeft -> (\t -> match Sideways t refPic)
 
 -- | Build a solution adding pieces to both sides
 topMiddleSolution :: (Int, Picture) -> [(Int, [Picture])] -> [FittingRow]
 topMiddleSolution topCenter@(_, topCenterPic) pieces = [topCenter] : do
-	leftPiece <- pieces >>= filterLeftMatches
-	rightPiece <- removePiece leftPiece pieces >>= filterRightMatches
+	rightPiece <- pieces >>= filterRightMatches
+	leftPiece <- removePiece rightPiece pieces >>= filterLeftMatches
 
 	let remPieces = removePiece rightPiece (removePiece leftPiece pieces)
 
-	leftSolution <- topRightwardSolution leftPiece remPieces
+	rightSolution <- topHorizontalSolution ToTheRight rightPiece remPieces
 
-	rightSolution <- topLeftwardSolution rightPiece $
-		DL.foldl' (flip removePiece) remPieces leftSolution
+	-- The soultions need to be reversed because they are to the left of the
+	-- `topCenter` piece.
+	leftSolution <- fmap reverse $ topHorizontalSolution ToTheLeft leftPiece $
+		DL.foldl' (flip removePiece) remPieces rightSolution
 
-	pure (rightSolution ++ [rightPiece, topCenter, leftPiece] ++ leftSolution)
+	pure (leftSolution ++ [leftPiece, topCenter, rightPiece] ++ rightSolution)
 	where
-	filterLeftMatches :: (Int, [Picture]) -> [(Int, Picture)]
-	filterLeftMatches (pid, trans) = (pid,) <$> filter (match Sideways topCenterPic) trans
-
 	filterRightMatches :: (Int, [Picture]) -> [(Int, Picture)]
-	filterRightMatches (pid, trans) = (pid,) <$> filter (\t -> match Sideways t topCenterPic) trans
+	filterRightMatches (pid, trans) = (pid,) <$> filter (match Sideways topCenterPic) trans
+
+	filterLeftMatches :: (Int, [Picture]) -> [(Int, Picture)]
+	filterLeftMatches (pid, trans) = (pid,) <$> filter (\t -> match Sideways t topCenterPic) trans
 
 -- | Build a solution adding a new row at the bottom
 downwardSolution :: FittingRow -> [(Int, [Picture])] -> [FittingPuzzle]
