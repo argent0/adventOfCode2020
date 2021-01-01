@@ -122,7 +122,7 @@ downwardSolution :: FittingRow -> [(Int, [Picture])] -> [FittingPuzzle]
 downwardSolution _ [] = [[]]
 downwardSolution (t : ts) pieces@(_ : _) = [] : do
 	bottomPiece <- pieces >>= filterBelowMatches
-	bsol <- bottomRowSolution ts bottomPiece
+	bsol <- bottomRowSolution bottomPiece ts
 		(filter (not . null . snd) $ removePiece bottomPiece pieces)
 	CM.guard (length (bottomPiece : bsol) == 12)
 	[bottomPiece : bsol] : do
@@ -134,17 +134,58 @@ downwardSolution (t : ts) pieces@(_ : _) = [] : do
 	filterBelowMatches (pid, trans) = (pid,) <$> filter (match Below (snd t)) trans 
 
 -- | Build a row at the bottom of another.
-bottomRowSolution :: FittingRow -> Piece -> [(Int, [Picture])] -> [FittingRow]
-bottomRowSolution [] _ _ = [[]]
-bottomRowSolution _ _ [] = [[]]
-bottomRowSolution (t : ts) bottomPiece pieces@(_ : _) = [] : do
-	candidate <- pieces >>= filterBelowMatches
-	CM.guard (match Sideways (snd bottomPiece) (snd candidate))
-	candidateSolution <- bottomRowSolution ts candidate (removePiece candidate pieces)
-	pure $ candidate : candidateSolution
+--
+-- Given a row of pieces (that fit together, although this funtion doesn't check
+-- that this is the case)
+--
+-- T1 T2 T3 T4
+--
+-- And a piece P0 (that could match a possible T0 to the left of T1). It builds
+-- all possible solutions (S1..) that fit to the right and below the T's.
+--
+--    T1 T2 T3 T4
+-- P0 S1 S2 S3 S4
+--
+-- So S1 fits P0 from the right and T1 from below. Similarly T2, etc...
+--
+-- This function is not greedy. It returns all possible solutions. In the
+-- running example that is:
+--
+-- [[], [S1], [S1, S2], [S1, S2, S3], [S1, S2, S3, S4]]
+--
+-- If there are more solutions, thouse too should be included on the list.
+--
+-- The solution is built to the right.
+--
+-- This function can be generalized to replace `topRowSolution` and enhanced to
+-- build solutions to the left.
+bottomRowSolution :: Piece -> FittingRow -> [(Int, [Picture])] -> [FittingRow]
+bottomRowSolution (_, sidePic) topRow pieces = unfoldrM unfolder (sidePic, (topRow, pieces))
 	where
+	unfolder :: (Picture, (FittingRow, [(Int, [Picture])])) ->
+		[Maybe (Piece, (Picture, (FittingRow, [(Int, [Picture])])))]
+	unfolder (_, ([], _)) = [Nothing]
+	-- `refPic` is P0 in the comment of the parent function. It changes to (S1,
+	-- S2,...) as the computation advances.
+	--
+	-- `(t : ts)` is the top (T1, T2, ...). It is consumed one by one.
+	--
+	-- `pieces` are the available pieces. The ones used are removed from the
+	-- list for the next iteration.
+	unfolder (refPic, (t : ts, pieces)) = (Nothing :) $
+		fmap
+			(\sidePiece -> Just (sidePiece,
+				( snd sidePiece
+				,	( ts
+					, removePiece sidePiece pieces))))
+			(concatMap filterBelowMatches pieces)
+		where
 
-	filterBelowMatches (pid, trans) = (pid,) <$> filter (match Below (snd t)) trans
+		filterBelowMatches (pid, trans) = (pid,) <$> filter selector trans
+
+		-- True if `p` matches P0 from the right and T1 from below.
+		selector :: Picture -> Bool
+		selector p = uncurry (&&) $ (match Sideways refPic &&& match Below (snd t)) p
 
 -- | Build a solution adding a new row on the top
 upwardSolution :: FittingRow -> [(Int, [Picture])] -> [FittingPuzzle]
