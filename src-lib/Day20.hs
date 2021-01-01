@@ -36,7 +36,8 @@ type FittingRow = [Piece]
 -- below.
 type FittingPuzzle = [FittingRow]
 
-data GrowthDirection = ToTheLeft | ToTheRight deriving Show
+data HorizontalGrowthDirection = ToTheLeft | ToTheRight deriving Show
+data VerticalGrowthDirection = Upwards | Downwards deriving Show
 
 -- | Build a solution adding pieces to the right
 --
@@ -57,7 +58,7 @@ data GrowthDirection = ToTheLeft | ToTheRight deriving Show
 --
 -- It doesn't include the starting piece (P0)
 --
--- if GrowthDirection is ToTheLeft. P1 fits to the left of P0
+-- if HorizontalGrowthDirection is ToTheLeft. P1 fits to the left of P0
 --
 -- P1 (P0)
 --
@@ -69,7 +70,7 @@ data GrowthDirection = ToTheLeft | ToTheRight deriving Show
 --
 -- This means that in this case the alternatives shouls be reversed to be
 -- displayed in the correct order.
-topHorizontalSolution :: GrowthDirection -> Piece -> [(Int, [Picture])] -> [FittingRow]
+topHorizontalSolution :: HorizontalGrowthDirection -> Piece -> [(Int, [Picture])] -> [FittingRow]
 topHorizontalSolution growthDir (_, topLeftPic) pieces = unfoldrM unfolder (topLeftPic, pieces)
 	where
 	unfolder :: (Picture, [(Int, [Picture])]) -> [Maybe (Piece, (Picture, [(Int, [Picture])]))]
@@ -122,7 +123,7 @@ downwardSolution :: FittingRow -> [(Int, [Picture])] -> [FittingPuzzle]
 downwardSolution _ [] = [[]]
 downwardSolution (t : ts) pieces@(_ : _) = [] : do
 	bottomPiece <- pieces >>= filterBelowMatches
-	bsol <- bottomRowSolution bottomPiece ts
+	bsol <- rowSolution Downwards bottomPiece ts
 		(filter (not . null . snd) $ removePiece bottomPiece pieces)
 	CM.guard (length (bottomPiece : bsol) == 12)
 	[bottomPiece : bsol] : do
@@ -133,7 +134,7 @@ downwardSolution (t : ts) pieces@(_ : _) = [] : do
 
 	filterBelowMatches (pid, trans) = (pid,) <$> filter (match Below (snd t)) trans 
 
--- | Build a row at the bottom of another.
+-- | Build a row at the bottom or top of another.
 --
 -- Given a row of pieces (that fit together, although this funtion doesn't check
 -- that this is the case)
@@ -157,10 +158,14 @@ downwardSolution (t : ts) pieces@(_ : _) = [] : do
 --
 -- The solution is built to the right.
 --
--- This function can be generalized to replace `topRowSolution` and enhanced to
--- build solutions to the left.
-bottomRowSolution :: Piece -> FittingRow -> [(Int, [Picture])] -> [FittingRow]
-bottomRowSolution (_, sidePic) topRow pieces = unfoldrM unfolder (sidePic, (topRow, pieces))
+-- In case the VerticalGrowthDirection is Upwards the above example becomes:
+--
+-- P0 S1 S2 S3 S4
+--    T1 T2 T3 T4
+--
+-- This function can be enhanced to build solutions to the left.
+rowSolution :: VerticalGrowthDirection -> Piece -> FittingRow -> [(Int, [Picture])] -> [FittingRow]
+rowSolution growthDir (_, sidePic) topRow pieces = unfoldrM unfolder (sidePic, (topRow, pieces))
 	where
 	unfolder :: (Picture, (FittingRow, [(Int, [Picture])])) ->
 		[Maybe (Piece, (Picture, (FittingRow, [(Int, [Picture])])))]
@@ -183,36 +188,25 @@ bottomRowSolution (_, sidePic) topRow pieces = unfoldrM unfolder (sidePic, (topR
 
 		filterBelowMatches (pid, trans) = (pid,) <$> filter selector trans
 
-		-- True if `p` matches P0 from the right and T1 from below.
+		-- True if `p` matches P0 from the right and T1 from below/above.
 		selector :: Picture -> Bool
-		selector p = uncurry (&&) $ (match Sideways refPic &&& match Below (snd t)) p
+		selector p = match Sideways refPic p && (
+			case growthDir of
+				Downwards -> match Below (snd t) p
+				Upwards -> match Below p (snd t) )
 
 -- | Build a solution adding a new row on the top
 upwardSolution :: FittingRow -> [(Int, [Picture])] -> [FittingPuzzle]
 upwardSolution _ [] = [[]]
 upwardSolution (b : bs) pieces@(_ : _) = [] : do
 	topPiece <- pieces >>= filterUpwardsMatches
-	tsol <- topRowSolution bs topPiece
+	tsol <- rowSolution Upwards topPiece bs
 		(filter (not . null . snd) $ removePiece topPiece pieces)
 	CM.guard (length (topPiece : tsol) == 12)
 	[topPiece : tsol] : do
 		let remPieces = DL.foldl' (flip removePiece) pieces (topPiece : tsol)
 		tsol' <- upwardSolution (topPiece : tsol) remPieces
 		[tsol' ++ [topPiece : tsol]]
-	where
-
-	filterUpwardsMatches (pid, trans) = (pid,) <$> filter (\t -> match Below t (snd b)) trans
-
--- | Build a row on the top of another.
-topRowSolution :: FittingRow -> Piece -> [(Int, [Picture])] -> [FittingRow]
-topRowSolution [] _ _ = [[]]
-topRowSolution _ _ [] = [[]]
-topRowSolution topRow@(b : bs) topPiece pieces@(_ : _) = [] : do
-	candidate <- pieces >>= filterUpwardsMatches
-	CM.guard (match Sideways (snd topPiece) (snd candidate))
-	[candidate] : do
-		candidateSolution <- topRowSolution bs candidate (removePiece candidate pieces)
-		pure $ candidate : candidateSolution
 	where
 
 	filterUpwardsMatches (pid, trans) = (pid,) <$> filter (\t -> match Below t (snd b)) trans
