@@ -26,6 +26,7 @@ import qualified Text.PrettyPrint.Boxes as Boxes
 import Debug.Trace
 
 type Picture = Array (L.V2 Int) Char
+
 type Piece = (Int, Picture)
 
 -- A `FittingRow` is a list of pieces that fit side by side in an horizontal
@@ -260,6 +261,38 @@ transforms basePic =
 	-- 180 degree rotation symmetry
 	rotations = basePic : takeWhile (/= basePic) (tail $ iterate (ClockWise 🥏) basePic )
 
+-- | Removes the edges from a picture.
+removeEdge :: Picture -> Picture
+removeEdge pic = IA.array (L.V2 1 1, L.V2 (xlim - 2) (ylim - 2)) $
+		zip (fmap (+ L.V2 (-1) (-1)) nonBorderPixels) (fmap (pic !) nonBorderPixels)
+	where
+	nonBorderPixels = L.V2 <$> [(orgx + 1)..(xlim-1)] <*> [(orgy + 1)..(ylim-1)]
+	(L.V2 orgx orgy, L.V2 xlim ylim) = IA.bounds pic
+
+bigPicture :: FittingPuzzle -> Picture
+bigPicture pzl = IA.array (L.V2 1 1, L.V2 xlim ylim) $ concatMap (\(y, cs) ->
+	fmap (first (`L.V2` y)) cs)  $ zip [1..] $ fmap (zip [1..]) picStrs
+	where
+	ylim = length picStrs
+	xlim = length $ head picStrs
+	-- Fold all rows together
+	picStrs = DL.foldl' picFolder [] $ fmap rows pictures
+	picFolder :: [String] -> [String] -> [String]
+	picFolder [] ss = ss
+	picFolder acc@(_ : _) ss = acc ++ ss
+	-- Build a big-row
+	rows :: [Picture] -> [String]
+	rows pcs = DL.foldl' rowFolder [] pcs
+	rowFolder :: [String] -> Picture -> [String]
+	rowFolder [] p = pl p
+	rowFolder acc@(_ : _) p = zipWith (++) acc (pl p)
+	-- pictures without borders
+	pictures :: [[Picture]]
+	pictures = fmap (fmap (removeEdge . snd)) pzl
+	-- piece lines
+	pl :: Picture -> [String]
+	pl p = fmap (fmap snd) $ DL.groupBy ((==) `on` ((^. _2) . fst)) $ DL.sortOn ((^. _2) . fst) $  IA.assocs p
+
 -- | Parse the input into a 2D map of chars using a default character if some
 -- lines are shorter
 parsePicture :: Char -> Parser Picture
@@ -294,7 +327,7 @@ runSolution filePath = do
 		Left err -> putStrLn $ "Error :" ++ err
 		Right input -> do
 			CM.forM_ (take 1 $ solver input) $ \ pzl -> do
-				putStrLn $ Boxes.render $ puzzleLines pzl
+				putStrLn $ Boxes.render $ picLines $ bigPicture pzl
 				putStrLn "-- End Solution --"
 	putStrLn "Done"
 
@@ -307,7 +340,8 @@ pieceLines :: Piece -> Boxes.Box
 pieceLines (pid, pic) = Boxes.text (show pid) Boxes.// picLines pic
 
 picLines :: Picture -> Boxes.Box
-picLines pic = Boxes.vcat Boxes.left $ fmap (Boxes.text . (snd <$>)) $ DL.groupBy ((==) `on` ((^. _2) . fst)) $ DL.sortOn ((^. _2) . fst) $  IA.assocs pic
+picLines pic = Boxes.vcat Boxes.left $ fmap (Boxes.text . (snd <$>)) $
+	DL.groupBy ((==) `on` ((^. _2) . fst)) $ DL.sortOn ((^. _2) . fst) $  IA.assocs pic
 
 data RotDir = ClockWise | CounterClockWise deriving (Show, Eq)
 
