@@ -5,6 +5,7 @@
 {-# LANGUAGE UnicodeSyntax #-}
 module Day20 ( runSolution) where
 
+import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.Attoparsec.ByteString (Parser)
 import qualified Data.Attoparsec.ByteString as DAB
@@ -22,6 +23,7 @@ import Data.Maybe (fromJust)
 import qualified Control.Monad as CM
 import qualified Data.Set as Set
 import qualified Text.PrettyPrint.Boxes as Boxes
+import qualified Control.Foldl as L
 
 import Debug.Trace
 
@@ -253,7 +255,7 @@ match relPos refPic testPic = and $ case relPos of
 transforms :: Picture -> [Picture]
 transforms basePic =
 	-- try to exploit the picture's symmetry. Flip symmetries.
-	Set.toList $ Set.fromList $ 
+	Set.toList $ Set.fromList $
 	-- An Horizontal flip is a Vertical flip and a 180 degree rotation.
 	rotations ++ ( (Vertical 🤸) <$> rotations )
 	where
@@ -269,6 +271,7 @@ removeEdge pic = IA.array (L.V2 1 1, L.V2 (xlim - 2) (ylim - 2)) $
 	nonBorderPixels = L.V2 <$> [(orgx + 1)..(xlim-1)] <*> [(orgy + 1)..(ylim-1)]
 	(L.V2 orgx orgy, L.V2 xlim ylim) = IA.bounds pic
 
+-- | Construct one big picture from a fitting puzzle
 bigPicture :: FittingPuzzle -> Picture
 bigPicture pzl = IA.array (L.V2 1 1, L.V2 xlim ylim) $ concatMap (\(y, cs) ->
 	fmap (first (`L.V2` y)) cs)  $ zip [1..] $ fmap (zip [1..]) picStrs
@@ -276,10 +279,7 @@ bigPicture pzl = IA.array (L.V2 1 1, L.V2 xlim ylim) $ concatMap (\(y, cs) ->
 	ylim = length picStrs
 	xlim = length $ head picStrs
 	-- Fold all rows together
-	picStrs = DL.foldl' picFolder [] $ fmap rows pictures
-	picFolder :: [String] -> [String] -> [String]
-	picFolder [] ss = ss
-	picFolder acc@(_ : _) ss = acc ++ ss
+	picStrs = concatMap rows pictures
 	-- Build a big-row
 	rows :: [Picture] -> [String]
 	rows pcs = DL.foldl' rowFolder [] pcs
@@ -289,7 +289,7 @@ bigPicture pzl = IA.array (L.V2 1 1, L.V2 xlim ylim) $ concatMap (\(y, cs) ->
 	-- pictures without borders
 	pictures :: [[Picture]]
 	pictures = fmap (fmap (removeEdge . snd)) pzl
-	-- piece lines
+	-- picture lines
 	pl :: Picture -> [String]
 	pl p = fmap (fmap snd) $ DL.groupBy ((==) `on` ((^. _2) . fst)) $ DL.sortOn ((^. _2) . fst) $  IA.assocs p
 
@@ -318,6 +318,31 @@ parseInput = DAB.many1' parseSingle
 		(string "Tile " *> decimal <* char ':' <* endOfLine) <*>
 		parsePicture 'X' <* DAB.choice [endOfLine <* endOfLine, endOfLine]
 
+-- | Cound the #'s present in a picture
+-- Right answer is 1607
+waterRoughness :: Picture -> Int
+waterRoughness = length . filter ((=='#') . snd) . IA.assocs
+
+-- | Detect the monsters and mark them with 'O'
+detectMonsters :: Picture -> Picture
+detectMonsters bigPic = bigPic IA.// fmap (,'O') monsters
+	where
+	-- The positions of the parts of the monsters
+	monsters = concatMap (fmap fst) $ filter (all ((=='#') . snd))  $ fmap mapper origins
+	mapper origin = fmap ( (id &&& (bigPic !)) . (+ origin)) monsterMold
+	-- All valid positions of the mosnter mold in the bigPic
+	origins = L.V2 <$> [picMinX..picMaxX - maxx] <*> [picMinY..picMaxY - maxy]
+	(L.V2 picMinX picMinY, L.V2 picMaxX picMaxY) = IA.bounds bigPic
+	-- The width and height of the moster mold
+	(Just maxx, Just maxy) = L.fold ((,) <$> L.premap (^. L._x) L.maximum <*> L.premap (^. L._y) L.maximum) monsterMold
+	-- The positions where the seaMonsterInput has a '#'
+	monsterMold :: [L.V2 Int]
+	monsterMold = concatMap (\(y, xs) -> fmap ((`L.V2` y) . fst) xs ) $
+		zip [0..] $
+		fmap
+			( filter ((== fromEnum '#') . fromEnum . snd) . zip [0..] . BS.unpack)
+			seaMonsterInput
+
 runSolution :: FilePath -> IO ()
 runSolution filePath = do
 	putStrLn "**Day 20**"
@@ -328,8 +353,15 @@ runSolution filePath = do
 		Right input -> do
 			CM.forM_ (take 1 $ solver input) $ \ pzl -> do
 				putStrLn $ Boxes.render $ picLines $ bigPicture pzl
+				CM.forM_ (transforms $ bigPicture pzl) $ print . waterRoughness . detectMonsters
 				putStrLn "-- End Solution --"
 	putStrLn "Done"
+
+seaMonsterInput :: [ByteString]
+seaMonsterInput =
+ [ "                  # "
+ , "#    ##    ##    ###"
+ , " #  #  #  #  #  #   " ]
 
 puzzleLines :: FittingPuzzle -> Boxes.Box
 puzzleLines pzl = Boxes.vsep 0 Boxes.left pls
@@ -348,7 +380,6 @@ data RotDir = ClockWise | CounterClockWise deriving (Show, Eq)
 --`#rotp`
 (🥏)  :: RotDir -> Picture -> Picture
 (🥏)  rotDir pic = IA.array (org, L.V2 ylim xlim) $
-	--traceShow (org,(ylim, xlim)) . traceShowId . first (untranslate . rotator rotDir . translate) <$> IA.assocs pic
 	first (untranslate . rotator rotDir . translate) <$> IA.assocs pic
 	where
 
@@ -362,7 +393,6 @@ data RotDir = ClockWise | CounterClockWise deriving (Show, Eq)
 	rotator CounterClockWise (L.V2 x y) = L.V2 y (negate x)
 	rotator ClockWise (L.V2 x y) = L.V2 (negate y) x
 
-	--L.V2 (negate y) x
 	(org, L.V2 xlim ylim) = IA.bounds pic
 	fxlim :: Float
 	fylim :: Float
@@ -373,7 +403,6 @@ data FlipAxis = Vertical | Horizontal deriving Show
 --`#flpp`
 (🤸) :: FlipAxis -> Picture -> Picture
 (🤸) flipAxis pic = IA.array (org, L.V2 ylim xlim) $
-	--traceShow (org,(ylim, xlim)) . traceShowId . first (untranslate . rotator rotDir . translate) <$> IA.assocs pic
 	first (untranslate . flipper flipAxis . translate) <$> IA.assocs pic
 
 	where
@@ -388,7 +417,6 @@ data FlipAxis = Vertical | Horizontal deriving Show
 	flipper Horizontal (L.V2 x y) = L.V2 x (negate y)
 	flipper Vertical (L.V2 x y) = L.V2 (negate x) y
 
-	--L.V2 (negate y) x
 	(org, L.V2 xlim ylim) = IA.bounds pic
 	fxlim :: Float
 	fylim :: Float
