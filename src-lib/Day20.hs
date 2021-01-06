@@ -336,11 +336,13 @@ detectMonsters bigPic = bigPic IA.// fmap (,'O') monsters
 	-- The width and height of the moster mold
 	(Just maxx, Just maxy) = L.fold ((,) <$> L.premap (^. L._x) L.maximum <*> L.premap (^. L._y) L.maximum) monsterMold
 	-- The positions where the seaMonsterInput has a '#'
+	-- Starts at 0, 0 becase it's intended to be uses as an offset from an
+	-- origin.
 	monsterMold :: [L.V2 Int]
 	monsterMold = concatMap (\(y, xs) -> fmap ((`L.V2` y) . fst) xs ) $
 		zip [0..] $
 		fmap
-			( filter ((== fromEnum '#') . fromEnum . snd) . zip [0..] . BS.unpack)
+			( filter ((== '#') . snd) . zip [0..] )
 			seaMonsterInput
 
 runSolution :: FilePath -> IO ()
@@ -357,7 +359,7 @@ runSolution filePath = do
 				putStrLn "-- End Solution --"
 	putStrLn "Done"
 
-seaMonsterInput :: [ByteString]
+seaMonsterInput :: [String]
 seaMonsterInput =
  [ "                  # "
  , "#    ##    ##    ###"
