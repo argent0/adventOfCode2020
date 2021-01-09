@@ -50,6 +50,7 @@ main = SE.getArgs >>= \case
 	["19"] -> Day19.runSolution "input/Day19"
 	["20"] -> Day20.runSolution "input/Day20"
 	["21"] -> Day21.runSolution "input/Day21"
+	["21i"] -> Day21.runSolution "short-input/Day21"
 	["22"] -> Day22.runSolution "input/Day22"
 	["23"] -> Day23.runSolution "input/Day23"
 	["24"] -> Day24.runSolution "input/Day24"
