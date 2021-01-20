@@ -22,106 +22,47 @@ import Data.Bifunctor (bimap)
 
 import Debug.Trace
 
-newtype Ingredient = Ingredient Text deriving (Show, Eq, Ord)
+newtype Ingredient = Ingredient { extractIngredient :: Text } deriving (Show, Eq, Ord)
 newtype Allergen = Allergen Text deriving (Show, Eq, Ord)
 
 type Input = (Set Ingredient, Set Allergen)
 
 type Translation = Map Allergen (Set Ingredient)
 
-solver :: [Input] -> [Translation]
-solver = fmap (DL.foldl1 Map.union) <<< unfoldrM solutionUnfolder <<<
-	fmap (DL.foldl' folder ([], Set.empty)) <<<
-	DL.sortBy (flip compare `on` length) <<<
-	DL.groupBy ((==) `on` snd) <<< DL.sortBy (compare `on` snd)
+-- Solution for part 1
+solver :: [Input] -> Integer
+solver input = DL.genericLength $ filter (`Set.member` safeIngredients) $ concatMap (Set.toList <<< fst) input
 	where
-	folder ([], as) (is, as')
-		| Set.null as = ([is], as')
+	kvalues = concatMap mapper input
+	mapper (is, as) = (, is) <$> Set.toList as
 
-	folder (acc@(_ : _), as) (is, as')
-		| as == as' = (is : acc, as)
-		| otherwise = error "Group error"
+	candidateTranslation = Map.fromListWith Set.intersection kvalues
 
-solutionUnfolder :: [([Set Ingredient], Set Allergen)] ->
-	[ Maybe (Translation, [([Set Ingredient], Set Allergen)]) ]
-solutionUnfolder [] = [Nothing]
-solutionUnfolder (((is, as) : rest)) =
-	let result = fmap (
-		\trans -> let
-			filtered = filter (not . Set.null . snd) $ fmap
-				(\(ris, ras) ->
-					( fmap (Set.filter (`notElem` Map.keys trans)) ris
-					, Set.filter (`notElem` Map.elems trans) ras) )
-				rest
-			in
-				( trans
-				, concat $ DL.sortBy (flip compare `on` length) $
-					DL.groupBy ((==) `on` snd) $ DL.sortBy (flip compare `on` snd) filtered)
-			) $ translations (repeated, as)
-	in Just <$> result
-		-- (filter
-		-- 	(\(_, next) -> DL.any (\(ris, ras) -> DL.any ((>= length ras) . length)  ris)  next)
-		-- 	result)
+	-- All ingredients
+	ingredients = DL.foldl' Set.union Set.empty $ fmap fst input
+
+	-- Ingredients that might contain allergens
+	potentialyUnsafeIngredients = DL.foldl' Set.union Set.empty $ Map.elems candidateTranslation
+
+	safeIngredients = Set.difference ingredients potentialyUnsafeIngredients
+
+-- Solution for part 2
+solver2 :: [Input] -> Text
+solver2 input = T.intercalate "," $ fmap extractIngredient $
+	concatMap (Set.toList . snd) $ DL.sortBy (compare `on` fst) $
+	concatMap Map.assocs $ DL.unfoldr unfolder candidateTranslation
 	where
-	repeated = case is of
-		[] -> Set.empty
-		( i : is') -> DL.foldl' Set.intersection i is'
+	unfolder :: Translation -> Maybe (Translation, Translation)
+	unfolder translation
+		| Map.null translation = Nothing
+		| otherwise = let
+				(solved, unsolved) = Map.partition ((== 1) . Set.size) translation
+				solvedIngredients = DL.foldl' Set.union Set.empty $ Map.elems solved
+			in Just (solved, Map.map (Set.filter (not . (`Set.member` solvedIngredients))) unsolved)
+	kvalues = concatMap mapper input
+	mapper (is, as) = (, is) <$> Set.toList as
 
---solver input = CM.foldM solutionFolder Map.empty $ DL.sortBy (compare `on` (length . fst)) input
-
--- Given a current translation and a new line of input return all valid
--- subsequent translations.
---
---solutionFolder :: Translation -> Input -> [Translation]
---solutionFolder translation (ingredients, allergens) = do
---	let (knownAllergens, unknownAllergens) =
---	 	DL.partition (`elem` Map.elems translation) allergens
---
---	-- all ingredients corresponding to the known allergens should be present in
---	-- the ingredients list.
---	CM.guard (DL.all ((`elem` ingredients) . fst) (filter ((`elem` knownAllergens) . snd)  $ Map.assocs translation))
---
---	let (knownIngredients, unknownIngredients) =
---		DL.partition (`elem` Map.keys translation) ingredients
---
---	CM.guard (length unknownAllergens <= length unknownIngredients)
---
---	trans <- translations (unknownIngredients, unknownAllergens)
---	pure $ Map.union translation trans
-
--- Return all possible subsequences of length n from a list. Orther matters.
---
--- [1, 2] /= [2, 1]
-subsequences :: Eq a =>  Int -> [a] -> [[a]]
-subsequences n []
-	| n < 0 = error "negative n"
-	| n == 0 = [[]]
-	| otherwise = []
-subsequences n (a : as)
-	| n < 0 = error "negative n"
-	| n == 0 = [[]]
-	| otherwise = do
-		h <- a : as
-		
-		(h :) <$> subsequences (n - 1) (filter (/= h) (a : as))
-
--- Given a list of ingredients and allergens return all possible translations of
--- ingredients into allergens.
---
--- Eg: ("a", "b", "c"), ("1", "2", "3")
---
--- a : 1
--- b : 2
---
--- a : 2
--- b : 1
---
--- ...
-translations :: Input -> [Translation]
-translations (ingredients, alergens) = do
-	ing <- subsequences (length alergens) $ Set.toList ingredients
-
-	pure $ Map.fromList $ zip ing (Set.toList alergens)
+	candidateTranslation = Map.fromListWith Set.intersection kvalues
 
 parseInput :: Parser [Input]
 parseInput = DAB.many1' (
@@ -143,9 +84,7 @@ runSolution filePath = do
 	case parseResult of
 		Left err -> putStrLn err
 		Right input ->
-			putStrLn $ unlines $ fmap show $ solver input
-
-	-- print $ solver $ parseQ $ lines contents
+			putStrLn $ T.unpack $ solver2 input
 
 -- | unfoldr in a monad.
 --
