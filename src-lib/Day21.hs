@@ -71,7 +71,7 @@ solver2 input = T.intercalate "," . fmap extractIngredient .
 						((a, is) : as) -> do
 							ingredient <- Set.toList is
 							let candidate = Map.fromList [(a, Set.singleton ingredient)]
-							let restUnsolved = Map.map (Set.filter (/= ingredient)) unsolved
+							let restUnsolved = Map.map (Set.filter (/= ingredient)) $ Map.fromList as
 							-- Continue only if all allergens have at least one
 							-- candidate ingredient.
 							CM.guard $ not $ any Set.null restUnsolved
