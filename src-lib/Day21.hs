@@ -33,6 +33,8 @@ type Translation = Map Allergen (Set Ingredient)
 solver :: [Input] -> Integer
 solver input = DL.genericLength $ filter (`Set.member` safeIngredients) $ concatMap (Set.toList <<< fst) input
 	where
+	-- Foreach allergen the candidate ingredients are the intersection of the
+	-- ingredients lists that have the allergen.
 	kvalues = concatMap mapper input
 	mapper (is, as) = (, is) <$> Set.toList as
 
@@ -47,18 +49,39 @@ solver input = DL.genericLength $ filter (`Set.member` safeIngredients) $ concat
 	safeIngredients = Set.difference ingredients potentialyUnsafeIngredients
 
 -- Solution for part 2
-solver2 :: [Input] -> Text
-solver2 input = T.intercalate "," $ fmap extractIngredient $
-	concatMap (Set.toList . snd) $ DL.sortBy (compare `on` fst) $
-	concatMap Map.assocs $ DL.unfoldr unfolder candidateTranslation
+-- All posible (Allergen, Ingredient) assignments that are compatible with the
+-- input. Restricted to one allergen per ingredient. There can be multiple solutions.
+solver2 :: [Input] -> [Text]
+solver2 input = T.intercalate "," . fmap extractIngredient .
+	concatMap (Set.toList . snd) . DL.sortBy (compare `on` fst) .
+	concatMap Map.assocs <$> unfoldrM unfolder candidateTranslation
 	where
-	unfolder :: Translation -> Maybe (Translation, Translation)
+	unfolder :: Translation -> [Maybe (Translation, Translation)]
 	unfolder translation
-		| Map.null translation = Nothing
+		| Map.null translation = [Nothing]
 		| otherwise = let
 				(solved, unsolved) = Map.partition ((== 1) . Set.size) translation
 				solvedIngredients = DL.foldl' Set.union Set.empty $ Map.elems solved
-			in Just (solved, Map.map (Set.filter (not . (`Set.member` solvedIngredients))) unsolved)
+			in if Map.null solved
+				then
+					-- Some allergens can be present in more than one
+					-- ingredient.
+					-- At this stage unsolved (shouldn't be null)
+					case Map.assocs unsolved of
+						((a, is) : as) -> do
+							ingredient <- Set.toList is
+							let candidate = Map.fromList [(a, Set.singleton ingredient)]
+							let restUnsolved = Map.map (Set.filter (/= ingredient)) unsolved
+							-- Continue only if all allergens have at least one
+							-- candidate ingredient.
+							CM.guard $ not $ any Set.null restUnsolved
+							pure $ Just (candidate, restUnsolved)
+				else do
+					CM.guard $ Map.size solved == Set.size solvedIngredients
+					-- There is one allergen per solved ingredient
+					pure $ Just
+						( solved
+						, Map.map (Set.filter (not . (`Set.member` solvedIngredients))) unsolved )
 	kvalues = concatMap mapper input
 	mapper (is, as) = (, is) <$> Set.toList as
 
@@ -84,7 +107,7 @@ runSolution filePath = do
 	case parseResult of
 		Left err -> putStrLn err
 		Right input ->
-			putStrLn $ T.unpack $ solver2 input
+			putStrLn $ T.unpack $ T.unlines $ solver2 input
 
 -- | unfoldr in a monad.
 --
