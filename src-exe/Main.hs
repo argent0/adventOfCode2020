@@ -52,6 +52,7 @@ main = SE.getArgs >>= \case
 	["21"] -> Day21.runSolution "input/Day21"
 	["21i"] -> Day21.runSolution "short-input/Day21"
 	["22"] -> Day22.runSolution "input/Day22"
+	["22i"] -> Day22.runSolution "short-input/Day22"
 	["23"] -> Day23.runSolution "input/Day23"
 	["24"] -> Day24.runSolution "input/Day24"
 	args -> error $ "Args were: " ++ show args
