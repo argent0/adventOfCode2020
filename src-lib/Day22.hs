@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase #-}
 module Day22 ( runSolution) where
 
 import qualified Data.ByteString as BS
@@ -49,16 +50,16 @@ append a (Deck hs ts) = Deck hs (a : ts)
 deckSize :: Deck a -> Int
 deckSize (Deck hs ts) = ((+) `on` length) hs ts
 
--- | Try to take n elemens from a list
-deckTake :: Int -> [a] -> Maybe [a]
-deckTake n = fmap reverse . go [] n
+-- | Try to take n elemens from a deck
+deckTake :: Int -> Deck a -> Maybe (Deck a)
+deckTake = go (Deck [] [])
 	where
-	go acc n []
+	go acc n (Deck [] [])
 		| n <= 0 = Just acc
 		| otherwise = Nothing
-	go acc n (dh : dt)
+	go acc@(Deck ah at) n d
 		| n <= 0 = Just acc
-		| otherwise = go (dh : acc) (n - 1) dt
+		| otherwise = let (h, t) = pop d in go (append h acc) (n - 1) t
 
 -- | Extract the first element of a deck (unsafe)
 pop :: Deck a -> (a, Deck a)
@@ -98,44 +99,73 @@ solver = fmap (DL.foldl' (+) 0 . zipWith (*) [1..] . reverse . winner) .
 -- Right: deck of player 2
 solver2 :: (Deck Int, Deck Int) -> Int
 solver2 i = DL.foldl' (+) 0 $ zipWith (*) [1..] $ reverse $ toList $ fromEither $ State.evalState (iteration i) HashSet.empty
+-- Version using unfolderM
+--solver2 i = DL.foldl' (+) 0 $ zipWith (*) [1..] $ reverse $ winner $ traceShowId $ State.evalState (last <$> unfoldrM unfolder i) HashSet.empty
 	where
-	iteration :: (Deck Int, Deck Int) -> State (HashSet ([Int], [Int])) (Either (Deck Int) (Deck Int))
-	iteration (Deck [] [], d2) = pure $ Right d2
+
+	iteration :: (Deck Int, Deck Int) -> State (HashSet (Deck Int, Deck Int)) (Either (Deck Int) (Deck Int))
 	iteration (d1, Deck [] []) = pure $ Left d1
+	iteration (Deck [] [], d2) = pure $ Right d2
 	iteration initial = do
-		let (l1@(h1 : t1), l2@(h2 : t2)) = (toList *** toList) initial
-		visited <- HashSet.member (l1, l2) <$> State.get
+		visited <- HashSet.member initial <$> State.get
 		if visited
 			-- If the configuration has been visited then player 1 wins
 			then pure $ Left (fst initial)
 			else traceShow initial $ do
 				-- save new configuration
-				State.modify (HashSet.insert (l1, l2))
+				State.modify (HashSet.insert initial)
 
 				-- pop top cards
-				-- let (h1, deck1') = pop $ fst initial
-				-- let (h2, deck2') = pop $ snd initial
+				let (h1, deck1) = pop $ fst initial
+				let (h2, deck2) = pop $ snd initial
 
-				-- let (mn, mx) = (min h1 h2, max h1 h2)
-
-				case (deckTake h1 t1, deckTake h2 t2) of
+				case (deckTake h1 deck1, deckTake h2 deck2) of
 					-- recursive combat
-					(Just nd1, Just nd2) -> trace "Subgame" $ case State.evalState (iteration (Deck nd1 [], Deck nd2 [])) HashSet.empty of
-						Left _ -> trace "Won 1" $ iteration (Deck t1 [h2, h1] , Deck t2 [])
-						Right _ -> trace "Won 2" $ iteration ( Deck t1 [] , Deck t2 [h1, h2])
+					(Just nd1, Just nd2) -> trace "Subgame" $ case State.evalState (iteration (nd1, nd2)) HashSet.empty of
+						Left _ -> trace "Won 1" $ iteration (append h2 (append h1 deck1) , deck2)
+						Right _ -> trace "Won 2" $ iteration ( deck1 , append h1 (append h2 deck2))
 
 					-- normal combat
-					_ |  h1 > h2 -> iteration ( Deck t1 [h2, h1] , Deck t2 [])
-					_ -> iteration ( Deck t1 [] , Deck t2 [h1, h2])
+					_ |  h1 > h2 -> iteration ( append h2 (append h1 deck1), deck2)
+					_ -> iteration ( deck1, append h1 (append h2 deck2))
 
-	unfinished :: (Deck Int, Deck Int) -> Bool
-	unfinished (Deck [] [], _) = False
-	unfinished (_, Deck [] []) = False
-	unfinished _ = True
+	-- Possible unfolder. I use two empy decks to signal the end of the game.
+	unfolder :: Input -> State (HashSet Input) (Maybe (Input, Input))
+	unfolder (Deck [] [], Deck [] []) = pure Nothing
+	-- One player won, so I signal the end of the game
+	unfolder i@(Deck [] [], _) = pure $ Just (i, (Deck [] [], Deck [] []))
+	unfolder i@(_, Deck [] []) = pure $ Just (i, (Deck [] [], Deck [] []))
+	unfolder initial = do
+		visited <- HashSet.member initial <$> State.get
+		if visited
+			-- If the configuration has been visited then player 1 wins
+			-- Singla end of game
+			then pure $ Just (initial, (Deck [] [], Deck [] []))
+			else traceShow initial $ do
+				-- save new configuration
+				State.modify (HashSet.insert initial)
+
+				-- pop top cards
+				let (h1, deck1) = pop $ fst initial
+				let (h2, deck2) = pop $ snd initial
+
+				case (deckTake h1 deck1, deckTake h2 deck2) of
+					-- recursive combat
+					(Just nd1, Just nd2) -> trace "Subgame" $ case State.evalState (last <$> unfoldrM unfolder (nd1, nd2)) HashSet.empty of
+						(_, Deck [] []) -> trace "Won 1" $ pure $ Just (initial, (append h2 (append h1 deck1) , deck2))
+						(Deck [] [], _) -> trace "Won 2" $ pure $ Just (initial, ( deck1 , append h1 (append h2 deck2)))
+						(_, _) -> trace "Won 1" $ pure $ Just (initial, (append h2 (append h1 deck1) , deck2))
+
+					-- normal combat
+					_ |  h1 > h2 -> pure $ Just ( initial, (append h2 (append h1 deck1), deck2))
+					_ -> pure $ Just (initial, ( deck1, append h1 (append h2 deck2)))
 
 	fromEither :: Either a a -> a
 	fromEither (Left a) = a
 	fromEither (Right a) = a
+
+	winner (Deck [] [], d) = toList d
+	winner (d, Deck [] []) = toList d
 
 parseInput :: Parser Input
 parseInput = (fromList *** fromList) <$> ( (,) <$>
@@ -160,3 +190,11 @@ runSolution filePath = do
 		Right input -> do
 			print $ solver input
 			print $ solver2 input
+
+-- | unfoldr in a monad.
+--
+-- This is missing from Data.List
+unfoldrM :: Monad m => (a -> m (Maybe (b, a))) -> a -> m [b]
+unfoldrM f a = f a >>= \case
+        Nothing -> pure []
+        Just (b, a') -> (b :) <$> unfoldrM f a'

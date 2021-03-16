@@ -5,8 +5,8 @@ let
   inherit (nixpkgs) pkgs;
 
   f = { mkDerivation, array, attoparsec, base, boxes, bytestring
-      , containers, doctest, foldl, lens, linear, mtl, recursion-schemes
-      , split, stdenv, text, vector
+      , containers, doctest, foldl, hashable, lens, lib, linear, mtl
+      , recursion-schemes, split, text, unordered-containers, vector
       }:
       mkDerivation {
         pname = "adventOfCode2020";
@@ -16,12 +16,13 @@ let
         isExecutable = true;
         libraryHaskellDepends = [
           array attoparsec base boxes bytestring containers doctest foldl
-          lens linear mtl recursion-schemes split text vector
+          hashable lens linear mtl recursion-schemes split text
+          unordered-containers vector
         ];
         executableHaskellDepends = [ attoparsec base bytestring ];
         testHaskellDepends = [ base ];
         description = "Advent of code 2020";
-        license = stdenv.lib.licenses.bsd3;
+        license = lib.licenses.bsd3;
       };
 
   haskellPackages = if compiler == "default"
