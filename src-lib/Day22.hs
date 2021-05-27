@@ -130,6 +130,7 @@ solver2 i = DL.foldl' (+) 0 $ zipWith (*) [1..] $ reverse $ toList $ fromEither 
 					_ -> iteration ( deck1, append h1 (append h2 deck2))
 
 	-- Possible unfolder. I use two empy decks to signal the end of the game.
+	-- Is the whole list of states stored in memory?
 	unfolder :: Input -> State (HashSet Input) (Maybe (Input, Input))
 	unfolder (Deck [] [], Deck [] []) = pure Nothing
 	-- One player won, so I signal the end of the game
