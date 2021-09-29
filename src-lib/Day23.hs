@@ -21,8 +21,6 @@ data Digit
 	| Nine
 	deriving (Show, Eq, Ord, Enum, Bounded)
 
-
-
 type Input = String
 
 solver input =
