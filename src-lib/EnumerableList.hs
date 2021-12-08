@@ -5,20 +5,15 @@
 
 module EnumerableList where
 
+import Prelude (Integer, Int, Num(..), fromIntegral, (<=), divMod, (==), (^), mod, div, error, (<), (>=), (>), Eq)
 import Data.Proxy (Proxy(..))
-import Data.List (foldl')
-import Prelude hiding
-	( take
-	, span
-	, splitAt
-	, break
-	, null
-	, map
-	, foldl
-	, foldr
-	, and)
+import Data.List (foldl', (++), reverse)
 import Debug.Trace
-import Data.Maybe (fromMaybe)
+import Data.Maybe (Maybe(..), fromMaybe)
+import GHC.Show (Show, show)
+import GHC.Enum (Enum(..), Bounded(..))
+import Data.Bool (Bool(..), otherwise, (&&), (||), not)
+import Data.Function ((.), ($), flip)
 
 
 -- 0 can't be used because it's impossible to distinguish 0x from 00x with this
@@ -27,7 +22,6 @@ newtype EnumList a = EnumList Integer
 
 instance (Enum a, Bounded a, Show a) => Show (EnumList a) where
 	show = ("fromList " ++) . show . toList
-
 
 -- | The "base" used to pack the values into an integer.
 --
@@ -66,6 +60,14 @@ fromList = foldl' (flip cons) empty . reverse
 
 -- Basic Functions
 
+-- Append
+-- O(app n m) = O(n)
+app :: forall a . (Enum a, Bounded a) => EnumList a -> EnumList a -> EnumList a
+app a@(EnumList na) b@(EnumList nb) = EnumList $ nb * base ^ length a + na
+	where
+	base :: Integer
+	base = fromIntegral $ enumListBase (Proxy :: Proxy a)
+
 uncons :: forall a . (Enum a, Bounded a) => EnumList a -> Maybe (a, EnumList a)
 uncons (EnumList ds) = let (t, h) = ds `divMod` base in
 	if h == 0
@@ -79,6 +81,17 @@ null :: forall a . (Enum a, Bounded a) => EnumList a -> Bool
 null (EnumList ds)
 	| ds <= 0 = True
 	| otherwise = False
+
+-- O(n)
+length :: forall a . (Enum a, Bounded a) => EnumList a -> Int
+length = go 0
+	where
+	go :: Int -> EnumList a -> Int
+	go acc (EnumList n)
+		| n == 0 = acc
+		| otherwise = go (acc + 1) (EnumList $ n `div` base)
+	base :: Integer
+	base = fromIntegral $ enumListBase (Proxy :: Proxy a)
 
 -- List Trasformations
 
@@ -149,6 +162,13 @@ elem d l@(EnumList ds)
 	| otherwise =
 		let (t, h) = ds `divMod` fromIntegral (enumListBase (Proxy :: Proxy a)) in
 		(fromEnum d == (fromInteger h - 1)) || t > 0 && EnumerableList.elem d (EnumList t)
+
+findIndex :: forall a . (Enum a, Bounded a, Eq a) => a -> EnumList a -> Maybe Int
+findIndex d = go 0
+	where
+	go acc l = case uncons l of
+		Nothing -> Nothing
+		Just (x, xs) -> if x == d then Just acc else go (acc + 1) xs
 
 
 -- span (< 3) [1,2,3,4,1,2,3,4] == ([1,2],[3,4,1,2,3,4])
